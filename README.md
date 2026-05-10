@@ -41,12 +41,12 @@ cd pinchana-api
 Create `.env` (see [Environment Variables](#environment-variables)):
 
 ```bash
-# Required
-NORDVPN_USER=your_nordvpn_username
-NORDVPN_PASSWORD=your_nordvpn_password
+# Required — NordVPN WireGuard private key (NordLynx)
+WIREGUARD_PRIVATE_KEY=your_private_key_here
 
 # Optional
 GLUETUN_API_KEY=secret-key
+SERVER_COUNTRIES=Netherlands,United States
 CACHE_MAX_SIZE_GB=10.0
 ```
 
@@ -188,13 +188,15 @@ Response:
 curl http://localhost:8080/health
 ```
 
-### Admin Endpoints (when `CONTAINER_MODE=true`)
+### Admin Endpoints
 
 ```bash
-# List modules
-curl http://localhost:8080/admin/modules
+# VPN control (always available)
+curl -X POST http://localhost:8080/admin/vpn/rotate
+curl http://localhost:8080/admin/vpn/status
 
-# Start / stop a module container
+# Container lifecycle (when CONTAINER_MODE=true)
+curl http://localhost:8080/admin/modules
 curl -X POST http://localhost:8080/admin/modules/tiktok/start
 curl -X POST http://localhost:8080/admin/modules/tiktok/stop
 ```
@@ -203,9 +205,7 @@ curl -X POST http://localhost:8080/admin/modules/tiktok/stop
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `NORDVPN_USER` | Yes* | — | NordVPN username |
-| `NORDVPN_PASSWORD` | Yes* | — | NordVPN password |
-| `WIREGUARD_PRIVATE_KEY` | Alt* | — | WireGuard private key (instead of OpenVPN) |
+| `WIREGUARD_PRIVATE_KEY` | **Yes** | — | NordVPN WireGuard (NordLynx) private key |
 | `SERVER_COUNTRIES` | No | — | Comma-separated VPN server countries |
 | `VPN_SERVICE_PROVIDER` | No | `nordvpn` | VPN provider for Gluetun |
 | `GLUETUN_API_KEY` | No | `secret-key` | API key for Gluetun control server |
@@ -213,7 +213,20 @@ curl -X POST http://localhost:8080/admin/modules/tiktok/stop
 | `CONTAINER_MODE` | No | `false` | Enable container lifecycle management in server |
 | `MODULES_CONFIG` | No | `/app/config/modules.yaml` | Path to module routing config |
 
-\* Either NordVPN credentials **or** a WireGuard private key is required for Gluetun.
+### Extracting your NordVPN WireGuard private key
+
+1. Install the NordVPN CLI and connect:
+   ```bash
+   nordvpn login
+   nordvpn connect
+   ```
+2. Extract the private key:
+   ```bash
+   sudo wg show nordlynx private-key
+   ```
+3. Copy the output into `WIREGUARD_PRIVATE_KEY` in your `.env` file.
+
+> **Why WireGuard?** WireGuard (NordLynx) is significantly faster than OpenVPN and reconnects almost instantly — critical for automated VPN rotation when scrapers hit rate limits.
 
 ## Module Routing
 

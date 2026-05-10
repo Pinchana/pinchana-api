@@ -13,8 +13,7 @@ services:
       - "8000:8000"      # Gluetun control server
     environment:
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-nordvpn}
-      - OPENVPN_USER=${NORDVPN_USER:-}
-      - OPENVPN_PASSWORD=${NORDVPN_PASSWORD:-}
+      - VPN_TYPE=wireguard
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY:-}
       - SERVER_COUNTRIES=${SERVER_COUNTRIES:-}
       - HTTP_CONTROL_SERVER_API_KEY=${GLUETUN_API_KEY:-secret-key}
@@ -65,6 +64,8 @@ services:
     environment:
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - GLUETUN_CONTROL_URL=http://localhost:8000
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
 
   instagram:
     build:
@@ -79,6 +80,8 @@ services:
     environment:
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - GLUETUN_CONTROL_URL=http://localhost:8000
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
 
 volumes:
   scraper-cache:
