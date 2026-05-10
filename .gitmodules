@@ -1,12 +1,12 @@
 [submodule "pinchana-core"]
 	path = pinchana-core
-	url = ./pinchana-core
+	url = https://github.com/Pinchana/pinchana-core.git
 [submodule "pinchana-server"]
 	path = pinchana-server
-	url = ./pinchana-server
+	url = https://github.com/Pinchana/pinchana-server.git
 [submodule "pinchana-tiktok"]
 	path = pinchana-tiktok
-	url = ./pinchana-tiktok
+	url = https://github.com/Pinchana/pinchana-tiktok.git
 [submodule "pinchana-inst"]
 	path = pinchana-inst
-	url = ./pinchana-inst
+	url = https://github.com/Pinchana/pinchana-inst.git
