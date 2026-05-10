@@ -1,6 +1,6 @@
 services:
   gluetun:
-    image: qmcgaw/gluetun
+    image: qmcgaw/gluetun:latest
     container_name: gluetun
     cap_add:
       - NET_ADMIN
@@ -26,12 +26,11 @@ services:
       retries: 3
     volumes:
       - scraper-cache:/app/cache
+    restart: always
 
   server:
-    build:
-      context: .
-      dockerfile: ./pinchana-server/Dockerfile
-    container_name: pinchana-server-dev
+    image: ghcr.io/pinchana/pinchana-api/server:latest
+    container_name: pinchana-server
     network_mode: container:gluetun
     depends_on:
       gluetun:
@@ -47,12 +46,11 @@ services:
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:8000
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+    restart: always
 
   tiktok:
-    build:
-      context: .
-      dockerfile: ./pinchana-tiktok/Dockerfile
-    container_name: pinchana-tiktok-dev
+    image: ghcr.io/pinchana/pinchana-api/tiktok:latest
+    container_name: pinchana-tiktok
     network_mode: container:gluetun
     depends_on:
       gluetun:
@@ -64,12 +62,11 @@ services:
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:8000
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+    restart: always
 
   instagram:
-    build:
-      context: .
-      dockerfile: ./pinchana-inst/Dockerfile
-    container_name: pinchana-inst-dev
+    image: ghcr.io/pinchana/pinchana-api/instagram:latest
+    container_name: pinchana-inst
     network_mode: container:gluetun
     depends_on:
       gluetun:
@@ -81,6 +78,7 @@ services:
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:8000
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+    restart: always
 
 volumes:
   scraper-cache:
