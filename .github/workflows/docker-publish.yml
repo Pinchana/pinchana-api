@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     tags: ['v*.*.*']
+    paths:
+      - '.github/workflows/docker-publish.yml'
+      - 'docker-compose.yml'
+      - 'pinchana-*'
   workflow_dispatch:
 
 env:
@@ -36,11 +40,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-
-      - name: Verify files exist
-        run: |
-          find . -name "uv.lock" -o -name "Dockerfile" | sort
-          ls -la pinchana-core/src/pinchana_core/__init__.py || true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
