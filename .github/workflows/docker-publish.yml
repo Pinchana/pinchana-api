@@ -35,15 +35,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      - name: Debug workspace
+      - name: Verify files exist
         run: |
-          echo "=== Root ==="
-          ls -la
-          echo "=== Submodules ==="
-          ls -la pinchana-core/ pinchana-server/ pinchana-tiktok/ pinchana-inst/ || true
-          echo "=== Lock files ==="
-          ls -la pinchana-core/uv.lock pinchana-server/uv.lock pinchana-tiktok/uv.lock pinchana-inst/uv.lock || true
+          find . -name "uv.lock" -o -name "Dockerfile" | sort
+          ls -la pinchana-core/src/pinchana_core/__init__.py || true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
