@@ -1,12 +1,14 @@
 modules:
   tiktok:
     enabled: true
+    route_patterns: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"]
     source:
       type: local
       path: /modules/pinchana-tiktok
     container:
       dockerfile: Dockerfile
       port: 8081
+      endpoint: http://localhost:8081
       image_tag: pinchana-module-tiktok
       container_name: pinchana-tiktok
       network: container:gluetun
@@ -16,12 +18,14 @@ modules:
 
   instagram:
     enabled: true
+    route_patterns: ["instagram.com", "instagr.am"]
     source:
       type: local
       path: /modules/pinchana-inst
     container:
       dockerfile: Dockerfile
       port: 8082
+      endpoint: http://localhost:8082
       image_tag: pinchana-module-inst
       container_name: pinchana-inst
       network: container:gluetun
