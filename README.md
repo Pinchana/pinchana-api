@@ -1,166 +1,136 @@
-# Pinchana API
+# 🐘 Pinchana API
 
-Unified scraping gateway for TikTok and Instagram. Routes requests through a VPN-secured network, caches media locally, and exposes a single HTTP API for all platforms.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/release/python-3130/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
-## Architecture
+**Pinchana** is a unified, high-performance scraping gateway designed to extract media from TikTok and Instagram reliably. It solves common scraping challenges by routing all traffic through a rotating VPN (via [Gluetun](https://github.com/qdm12/gluetun)) and employing advanced bypass techniques.
 
+---
+
+## 📖 Table of Contents
+
+- [✨ Key Features](#-key-features)
+- [🏗 Architecture](#-architecture)
+- [📂 Repository Structure](#-repository-structure)
+- [🚀 Quick Start](#-quick-start)
+- [⚙️ Configuration](#-configuration)
+- [📡 API Usage](#-api-usage)
+- [🛠 Development](#-development)
+- [📜 License](#-license)
+
+---
+
+## ✨ Key Features
+
+- **🎯 Unified API:** A single gateway (`/scrape`) to handle different social media platforms.
+- **🛡 VPN-First Design:** Zero-trust networking. Scrapers have no direct internet access; all traffic *must* exit through the VPN.
+- **🔄 Smart Rotation:** Automatic IP rotation when rate limits (403/429) are detected.
+- **💾 Global Media Cache:** Persistent LRU (Least Recently Used) cache for images and videos to save bandwidth and avoid re-scraping.
+- **🧩 Extensible Architecture:** Easily add new scraper modules by defining simple route patterns.
+- **🐳 Container Managed:** Optional auto-lifecycle management for scraper containers via the gateway.
+
+---
+
+## 🏗 Architecture
+
+Pinchana follows a modular architecture where a central gateway routes requests to specialized scraper modules.
+
+```mermaid
+graph TD
+    Client[Client] -->|POST /scrape| Gateway[Pinchana Server :8080]
+    Gateway -->|Route by Pattern| Modules{Module Registry}
+    
+    subgraph "Internal Network (VPN Secured)"
+        Modules -->|Proxy| TikTok[TikTok Scraper :8081]
+        Modules -->|Proxy| Instagram[Instagram Scraper :8082]
+        
+        TikTok -->|Traffic| Gluetun[Gluetun VPN]
+        Instagram -->|Traffic| Gluetun
+    end
+    
+    Gluetun -->|Encrypted Tunnel| Internet((Internet))
+    
+    TikTok -.->|Save| Cache[(LRU Media Cache)]
+    Instagram -.->|Save| Cache
 ```
-┌─────────────┐      ┌───────────────────────────────────────────┐
-│   Client    │────▶│  Server (ghcr.io/pinchana/pinchana-api)   │
-│             │      │  ┌─────────────┐     ┌─────────────────┐  │
-└─────────────┘      │  │ Container   │───▶│ TikTok Scraper  │  │
-                     │  │ Registry    │     │   :8081         │  │
-                     │  │ (modules)   │───▶│ Instagram       │  │
-                     │  └─────────────┘     │   :8082         │  │
-                     └──────────────────────┴─────────────────┴──┘ 
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │   Gluetun VPN   │
-                    └─────────────────┘
-```
 
-- **Server** (`:8080`) — FastAPI gateway. Discovers scrapers from `modules.yaml`, routes `POST /scrape` by URL pattern, proxies to container modules over HTTP.
-- **TikTok** (`:8081`) — Standalone yt-dlp-based scraper.
-- **Instagram** (`:8082`) — Standalone Playwright-based scraper.
-- **Gluetun** — VPN container. All scrapers use `network_mode: container:gluetun` so traffic exits through the VPN tunnel.
+- **Pinchana Server:** FastAPI gateway. Manages module discovery, request routing, and optional container lifecycle.
+- **Scraper Modules:** Standalone services (TikTok, Instagram) that perform the actual extraction.
+- **Gluetun:** VPN sidecar ensuring all outgoing traffic is protected and rotatable.
+- **Pinchana Core:** Shared library providing models, storage logic, and VPN signaling.
 
-## Quick Start (Pre-built Images)
+---
 
-The fastest way to run everything is with the images already published to GitHub Container Registry.
+## 📂 Repository Structure
 
-### 1. Clone with submodules
+The project is organized as a monorepo with submodules for each component:
 
+| Directory | Component | Description |
+|-----------|-----------|-------------|
+| [`pinchana-server/`](./pinchana-server) | **Gateway** | Central FastAPI router and module manager. |
+| [`pinchana-core/`](./pinchana-core) | **Core** | Shared logic: LRU Cache, VPN control, Docker orchestration. |
+| [`pinchana-inst/`](./pinchana-inst) | **Instagram** | High-performance scraper (GraphQL + Playwright fallback). |
+| [`pinchana-tiktok/`](./pinchana-tiktok) | **TikTok** | Custom yt-dlp based extractor for TikTok media. |
+| `config/` | **Config** | Runtime configuration (e.g., `modules.yaml`). |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Clone the Repository
+Ensure you clone with submodules to get all components:
 ```bash
 git clone --recursive https://github.com/Pinchana/pinchana-api.git
 cd pinchana-api
 ```
 
-### 2. Configure environment
-
-Create `.env` (see [Environment Variables](#environment-variables)):
-
+### 2. Configure Environment
+Create a `.env` file from the example:
 ```bash
-# Required — NordVPN WireGuard private key (NordLynx)
+cp .env.example .env
+```
+Add your **NordVPN WireGuard Private Key** (NordLynx):
+```env
 WIREGUARD_PRIVATE_KEY=your_private_key_here
-
-# Optional
-GLUETUN_API_KEY=secret-key
-SERVER_COUNTRIES=Netherlands,United States
-CACHE_MAX_SIZE_GB=10.0
 ```
+*(See [Configuration](#-extracting-your-nordvpn-wireguard-private-key) for instructions on how to get this key.)*
 
-### 3. Create module config
-
+### 3. Run with Docker Compose
 ```bash
-mkdir -p config
-cat > config/modules.yaml << 'EOF'
-modules:
-  tiktok:
-    enabled: true
-    route_patterns: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"]
-    source:
-      type: local
-      path: /modules/pinchana-tiktok
-    container:
-      dockerfile: Dockerfile
-      port: 8081
-      endpoint: http://localhost:8081
-      image_tag: pinchana-module-tiktok
-      container_name: pinchana-tiktok
-      network: container:gluetun
-      cache_volume: scraper-cache
-      env:
-        CACHE_MAX_SIZE_GB: "10.0"
-
-  instagram:
-    enabled: true
-    route_patterns: ["instagram.com", "instagr.am"]
-    source:
-      type: local
-      path: /modules/pinchana-inst
-    container:
-      dockerfile: Dockerfile
-      port: 8082
-      endpoint: http://localhost:8082
-      image_tag: pinchana-module-inst
-      container_name: pinchana-inst
-      network: container:gluetun
-      cache_volume: scraper-cache
-      env:
-        CACHE_MAX_SIZE_GB: "10.0"
-EOF
-```
-
-### 4. Start with pre-built images
-
-Replace the `build:` blocks in `docker-compose.yml` with `image:` references:
-
-```yaml
-services:
-  server:
-    image: ghcr.io/pinchana/pinchana-api/server:latest
-    # remove: build: ...
-
-  tiktok:
-    image: ghcr.io/pinchana/pinchana-api/tiktok:latest
-    # remove: build: ...
-
-  instagram:
-    image: ghcr.io/pinchana/pinchana-api/instagram:latest
-    # remove: build: ...
-```
-
-Or use an override file:
-
-```bash
-cat > docker-compose.override.yml << 'EOF'
-services:
-  server:
-    image: ghcr.io/pinchana/pinchana-api/server:latest
-    build: !reset null
-  tiktok:
-    image: ghcr.io/pinchana/pinchana-api/tiktok:latest
-    build: !reset null
-  instagram:
-    image: ghcr.io/pinchana/pinchana-api/instagram:latest
-    build: !reset null
-EOF
-
 docker compose up -d
 ```
+This will build (or pull) and start the Gateway, Scrapers, and VPN.
 
-> **Note:** GHCR packages are tied to the repository visibility. If the images are private, log in first:  
-> `echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin`
-
-### 5. Verify
-
+### 4. Verify Installation
 ```bash
 curl http://localhost:8080/health
 ```
 
-## Local Development (Build from Source)
+---
 
-If you want to build the images locally instead of pulling from GHCR:
+## ⚙️ Configuration
 
-```bash
-# Make sure submodules are up to date
-git submodule update --init --recursive
+### Environment Variables
 
-# Build and start everything
-docker compose up --build -d
-```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `WIREGUARD_PRIVATE_KEY` | **Yes** | — | Your VPN WireGuard private key. |
+| `SERVER_COUNTRIES` | No | — | Comma-separated list of countries (e.g., `Netherlands,Germany`). |
+| `CACHE_MAX_SIZE_GB` | No | `10.0` | Maximum size for the media cache. |
+| `CONTAINER_MODE` | No | `true` | Enable container management features in the gateway. |
 
-### Rebuild a single service
+### 🔑 Extracting your NordVPN WireGuard Private Key
+1. Connect to NordVPN using the CLI: `nordvpn connect`.
+2. Run: `sudo wg show nordlynx private-key`.
+3. Copy the output to your `.env` file.
 
-```bash
-docker compose build tiktok
-docker compose up -d tiktok
-```
+---
 
-## API Usage
+## 📡 API Usage
 
 ### Scrape a URL
+The gateway automatically detects the platform based on the URL.
 
 ```bash
 curl -X POST http://localhost:8080/scrape \
@@ -168,102 +138,31 @@ curl -X POST http://localhost:8080/scrape \
   -d '{"url": "https://www.tiktok.com/@username/video/1234567890"}'
 ```
 
-Response:
-
-```json
-{
-  "shortcode": "1234567890",
-  "caption": "Video caption...",
-  "author": "@username",
-  "media_type": "video",
-  "thumbnail_url": "https://...",
-  "video_url": "https://...",
-  "carousel": null
-}
-```
-
-### Health Check
-
-```bash
-curl http://localhost:8080/health
-```
-
 ### Admin Endpoints
+- `POST /admin/vpn/rotate`: Trigger an immediate IP change.
+- `GET /admin/vpn/status`: Check current VPN health and IP.
+- `GET /admin/modules`: List active scraper modules.
+
+---
+
+## 🛠 Development
+
+### Using `uv` for Package Management
+Each sub-project is a standalone Python package managed by [uv](https://github.com/astral-sh/uv).
 
 ```bash
-# VPN control (always available)
-curl -X POST http://localhost:8080/admin/vpn/rotate
-curl http://localhost:8080/admin/vpn/status
-
-# Container lifecycle (when CONTAINER_MODE=true)
-curl http://localhost:8080/admin/modules
-curl -X POST http://localhost:8080/admin/modules/tiktok/start
-curl -X POST http://localhost:8080/admin/modules/tiktok/stop
-```
-
-## Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `WIREGUARD_PRIVATE_KEY` | **Yes** | — | NordVPN WireGuard (NordLynx) private key |
-| `SERVER_COUNTRIES` | No | — | Comma-separated VPN server countries |
-| `VPN_SERVICE_PROVIDER` | No | `nordvpn` | VPN provider for Gluetun |
-| `GLUETUN_API_KEY` | No | `secret-key` | API key for Gluetun control server |
-| `CACHE_MAX_SIZE_GB` | No | `10.0` | Max cache size in GB |
-| `CONTAINER_MODE` | No | `false` | Enable container lifecycle management in server |
-| `MODULES_CONFIG` | No | `/app/config/modules.yaml` | Path to module routing config |
-
-### Extracting your NordVPN WireGuard private key
-
-1. Install the NordVPN CLI and connect:
-   ```bash
-   nordvpn login
-   nordvpn connect
-   ```
-2. Extract the private key:
-   ```bash
-   sudo wg show nordlynx private-key
-   ```
-3. Copy the output into `WIREGUARD_PRIVATE_KEY` in your `.env` file.
-
-> **Why WireGuard?** WireGuard (NordLynx) is significantly faster than OpenVPN and reconnects almost instantly — critical for automated VPN rotation when scrapers hit rate limits.
-
-## Module Routing
-
-The server routes scrape requests automatically based on URL patterns defined in `modules.yaml`:
-
-| URL Contains | Routed To |
-|--------------|-----------|
-| `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com` | TikTok scraper (`:8081`) |
-| `instagram.com`, `instagr.am` | Instagram scraper (`:8082`) |
-
-You can add new modules by extending `config/modules.yaml` and providing a matching container image.
-
-## Repository Structure
-
-```
-pinchana-api/
-├── pinchana-core/      # Shared models, storage, VPN, plugin registry, Docker manager
-├── pinchana-server/    # Unified gateway (FastAPI)
-├── pinchana-tiktok/    # TikTok scraper module
-├── pinchana-inst/      # Instagram scraper module
-├── config/             # Runtime configuration (modules.yaml)
-├── docker-compose.yml  # Local orchestration
-└── .github/workflows/  # CI/CD for GHCR
-```
-
-## Contributing
-
-Each service is a standalone Python package managed by `uv`. To work on a module:
-
-```bash
-cd pinchana-tiktok
+cd pinchana-server
 uv sync
-uv run python -m pinchana_tiktok.main
+uv run uvicorn src.pinchana_server.main:app --reload
 ```
 
-Make sure to commit submodule changes from within the submodule directory, then update the parent repo's submodule pointers.
+### Adding a New Module
+1. Create a new directory (e.g., `pinchana-youtube`).
+2. Implement the `/scrape` endpoint returning the standard `ScrapeResponse` model.
+3. Add the module configuration to `config/modules.yaml`.
 
-## License
+---
 
-MIT
+## 📜 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
