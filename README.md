@@ -5,14 +5,14 @@ Unified scraping gateway for TikTok and Instagram. Routes requests through a VPN
 ## Architecture
 
 ```
-┌─────────────┐     ┌──────────────────────────────────────────┐
-│   Client    │────▶│  Server (ghcr.io/pinchana/pinchana-api)  │
-│             │     │  ┌─────────────┐    ┌─────────────────┐  │
-└─────────────┘     │  │ Container   │───▶│ TikTok Scraper  │  │
-                    │  │ Registry    │    │   :8081         │  │
-                    │  │ (modules)   │───▶│ Instagram       │  │
-                    │  └─────────────┘    │   :8082         │  │
-                    └─────────────────────┴─────────────────┘  │
+┌─────────────┐      ┌───────────────────────────────────────────┐
+│   Client    │────▶│  Server (ghcr.io/pinchana/pinchana-api)   │
+│             │      │  ┌─────────────┐     ┌─────────────────┐  │
+└─────────────┘      │  │ Container   │───▶│ TikTok Scraper  │  │
+                     │  │ Registry    │     │   :8081         │  │
+                     │  │ (modules)   │───▶│ Instagram       │  │
+                     │  └─────────────┘     │   :8082         │  │
+                     └──────────────────────┴─────────────────┴──┘ 
                               │
                               ▼
                     ┌─────────────────┐
