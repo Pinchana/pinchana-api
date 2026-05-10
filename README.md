@@ -97,13 +97,13 @@ WIREGUARD_PRIVATE_KEY=your_private_key_here
 *(See [Configuration](#-extracting-your-nordvpn-wireguard-private-key) for instructions on how to get this key.)*
 
 ### 3. Run with Docker Compose
-To run using pre-built images from GHCR:
+To run using pre-built images from GHCR (default):
 ```bash
-docker compose -f docker-compose.ghcr.yml up -d
+docker compose up -d
 ```
 To build and run locally from source:
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 This will start the Gateway, Scrapers, and VPN.
 
