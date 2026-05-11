@@ -80,7 +80,8 @@ jobs:
           first=1
           for svc in server tiktok instagram shorts soundcloud ytmusic spotify deezer; do
             dir="pinchana-${svc}"
-            if echo "$CHANGED" | grep -q "^${dir}/"; then
+            # Match both dir/ (files inside) and dir itself (submodule pointer update)
+            if echo "$CHANGED" | grep -qE "^${dir}/|^${dir}$"; then
               [[ $first -eq 0 ]] && matrix+=","
               matrix+="{\"service\": \"$svc\"}"
               first=0
