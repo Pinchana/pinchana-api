@@ -7,7 +7,7 @@ on:
     paths:
       - '.github/workflows/docker-publish.yml'
       - 'docker-compose.yml'
-      - 'pinchana-*/**'
+      - 'pinchana-*'
   workflow_dispatch:
 
 env:
