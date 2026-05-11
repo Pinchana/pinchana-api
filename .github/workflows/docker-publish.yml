@@ -123,15 +123,16 @@ jobs:
       - name: Map service to Dockerfile
         id: map
         run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           case "${{ matrix.service }}" in
-            server)     echo "dockerfile=./pinchana-server/Dockerfile" >> $GITHUB_OUTPUT; echo "image=${{ github.repository }}/server" >> $GITHUB_OUTPUT ;;
-            tiktok)     echo "dockerfile=./pinchana-tiktok/Dockerfile" >> $GITHUB_OUTPUT; echo "image=${{ github.repository }}/tiktok" >> $GITHUB_OUTPUT ;;
-            instagram)  echo "dockerfile=./pinchana-inst/Dockerfile" >> $GITHUB_OUTPUT; echo "image=${{ github.repository }}/instagram" >> $GITHUB_OUTPUT ;;
-            shorts)     echo "dockerfile=./pinchana-shorts/Dockerfile" >> $GITHUB_OUTPUT; echo "image=${{ github.repository }}/shorts" >> $GITHUB_OUTPUT ;;
-            soundcloud) echo "dockerfile=./pinchana-soundcloud/Dockerfile" >> $GITHUB_OUTPUT; echo "image=${{ github.repository }}/soundcloud" >> $GITHUB_OUTPUT ;;
-            ytmusic)    echo "dockerfile=./pinchana-ytmusic/Dockerfile" >> $GITHUB_OUTPUT; echo "image=${{ github.repository }}/ytmusic" >> $GITHUB_OUTPUT ;;
-            spotify)    echo "dockerfile=./pinchana-spotify/Dockerfile" >> $GITHUB_OUTPUT; echo "image=${{ github.repository }}/spotify" >> $GITHUB_OUTPUT ;;
-            deezer)     echo "dockerfile=./pinchana-deezer/Dockerfile" >> $GITHUB_OUTPUT; echo "image=${{ github.repository }}/deezer" >> $GITHUB_OUTPUT ;;
+            server)     echo "dockerfile=./pinchana-server/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/server" >> $GITHUB_OUTPUT ;;
+            tiktok)     echo "dockerfile=./pinchana-tiktok/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/tiktok" >> $GITHUB_OUTPUT ;;
+            instagram)  echo "dockerfile=./pinchana-inst/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/instagram" >> $GITHUB_OUTPUT ;;
+            shorts)     echo "dockerfile=./pinchana-shorts/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/shorts" >> $GITHUB_OUTPUT ;;
+            soundcloud) echo "dockerfile=./pinchana-soundcloud/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/soundcloud" >> $GITHUB_OUTPUT ;;
+            ytmusic)    echo "dockerfile=./pinchana-ytmusic/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/ytmusic" >> $GITHUB_OUTPUT ;;
+            spotify)    echo "dockerfile=./pinchana-spotify/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/spotify" >> $GITHUB_OUTPUT ;;
+            deezer)     echo "dockerfile=./pinchana-deezer/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/deezer" >> $GITHUB_OUTPUT ;;
           esac
 
       - name: Extract metadata
