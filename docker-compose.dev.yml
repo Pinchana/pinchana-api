@@ -10,6 +10,7 @@ services:
       - "8080:8080"      # Server API
       - "8081:8081"      # TikTok scraper
       - "8082:8082"      # Instagram scraper
+      - "8083:8083"      # YouTube Shorts scraper
       - "8000:8000"      # Gluetun control server
     environment:
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-nordvpn}
@@ -81,6 +82,26 @@ services:
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:8000
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+
+  shorts:
+    build:
+      context: .
+      dockerfile: ./pinchana-shorts/Dockerfile
+    container_name: pinchana-shorts-dev
+    network_mode: container:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - scraper-cache:/app/cache
+      - ${SHORTS_COOKIES_DIR:-./secrets/yt-cookies}:/run/pinchana-cookies:ro
+    environment:
+      - CACHE_PATH=/app/cache
+      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - GLUETUN_CONTROL_URL=http://localhost:8000
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+      - YTDLP_COOKIES_DIR=/run/pinchana-cookies
+      - SHORTS_MAX_MB_PER_MINUTE=${SHORTS_MAX_MB_PER_MINUTE:-18.0}
 
 volumes:
   scraper-cache:

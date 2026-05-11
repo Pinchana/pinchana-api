@@ -10,3 +10,6 @@
 [submodule "pinchana-inst"]
 	path = pinchana-inst
 	url = https://github.com/Pinchana/pinchana-inst.git
+[submodule "pinchana-shorts"]
+	path = pinchana-shorts
+	url = https://github.com/Pinchana/pinchana-shorts.git

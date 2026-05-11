@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![Publish Docker images](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml)
 
-**Pinchana** is a unified, high-performance scraping gateway designed to extract media from TikTok and Instagram reliably. It solves common scraping challenges by routing all traffic through a rotating VPN (via [Gluetun](https://github.com/qdm12/gluetun)) and employing advanced bypass techniques.
+**Pinchana** is a unified, high-performance scraping gateway designed to extract media from TikTok, Instagram, and YouTube Shorts reliably. It solves common scraping challenges by routing all traffic through a rotating VPN (via [Gluetun](https://github.com/qdm12/gluetun)) and employing advanced bypass techniques.
 
 ---
 
@@ -45,9 +45,11 @@ graph TD
     subgraph "Internal Network (VPN Secured)"
         Modules -->|Proxy| TikTok[TikTok Scraper :8081]
         Modules -->|Proxy| Instagram[Instagram Scraper :8082]
+        Modules -->|Proxy| Shorts[YouTube Shorts Scraper :8083]
         
         TikTok -->|Traffic| Gluetun[Gluetun VPN]
         Instagram -->|Traffic| Gluetun
+        Shorts -->|Traffic| Gluetun
     end
     
     Gluetun -->|Encrypted Tunnel| Internet((Internet))
@@ -57,7 +59,7 @@ graph TD
 ```
 
 - **Pinchana Server:** FastAPI gateway. Manages module discovery, request routing, and optional container lifecycle.
-- **Scraper Modules:** Standalone services (TikTok, Instagram) that perform the actual extraction.
+- **Scraper Modules:** Standalone services (TikTok, Instagram, YouTube Shorts) that perform the actual extraction.
 - **Gluetun:** VPN sidecar ensuring all outgoing traffic is protected and rotatable.
 - **Pinchana Core:** Shared library providing models, storage logic, and VPN signaling.
 
@@ -73,6 +75,7 @@ The project is organized as a monorepo with submodules for each component:
 | [`pinchana-core/`](./pinchana-core) | **Core** | Shared logic: LRU Cache, VPN control, Docker orchestration. |
 | [`pinchana-inst/`](./pinchana-inst) | **Instagram** | High-performance scraper (GraphQL + Playwright fallback). |
 | [`pinchana-tiktok/`](./pinchana-tiktok) | **TikTok** | Custom yt-dlp based extractor for TikTok media. |
+| [`pinchana-shorts/`](./pinchana-shorts) | **YouTube Shorts** | yt-dlp based extractor with secure cookie loading and size-aware MP4 output. |
 | `config/` | **Config** | Runtime configuration (e.g., `modules.yaml`). |
 
 ---
@@ -125,6 +128,22 @@ curl http://localhost:8080/health
 | `SERVER_COUNTRIES` | No | — | Comma-separated list of countries (e.g., `Netherlands,Germany`). |
 | `CACHE_MAX_SIZE_GB` | No | `10.0` | Maximum size for the media cache. |
 | `CONTAINER_MODE` | No | `true` | Enable container management features in the gateway. |
+| `SHORTS_COOKIES_DIR` | No | `./secrets/yt-cookies` | Host directory containing YouTube cookies files (mounted read-only). |
+| `SHORTS_MAX_MB_PER_MINUTE` | No | `18.0` | Soft size target for Shorts output; bigger files are re-encoded. |
+
+### 🔐 Secure YouTube Cookies Mount (read-only)
+1. Create a local secrets folder and keep it out of git:
+   ```bash
+   mkdir -p ./secrets/yt-cookies
+   chmod 700 ./secrets ./secrets/yt-cookies
+   ```
+2. Place your exported Netscape cookie file there (e.g. `youtube.com_cookies.txt`) and tighten file permissions:
+   ```bash
+   chmod 600 ./secrets/yt-cookies/*.txt
+   ```
+3. Keep `SHORTS_COOKIES_DIR=./secrets/yt-cookies` in `.env`.
+
+The Shorts module mounts this folder as read-only and copies cookies into an ephemeral `/tmp` file for yt-dlp runtime use, so the mounted source is not modified.
 
 ### 🔑 Extracting your NordVPN WireGuard Private Key
 1. Connect to NordVPN using the CLI: `nordvpn connect`.
@@ -142,6 +161,11 @@ The gateway automatically detects the platform based on the URL.
 curl -X POST http://localhost:8080/scrape \
   -H "Content-Type: application/json" \
   -d '{"url": "https://www.tiktok.com/@username/video/1234567890"}'
+
+# YouTube Shorts example
+curl -X POST http://localhost:8080/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/shorts/VIDEO_ID"}'
 ```
 
 ### Admin Endpoints

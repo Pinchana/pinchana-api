@@ -7,7 +7,7 @@ on:
     paths:
       - '.github/workflows/docker-publish.yml'
       - 'docker-compose.yml'
-      - 'pinchana-*'
+      - 'pinchana-*/**'
   workflow_dispatch:
 
 env:
@@ -33,6 +33,9 @@ jobs:
           - service: instagram
             image: ${{ github.repository }}/instagram
             dockerfile: ./pinchana-inst/Dockerfile
+          - service: shorts
+            image: ${{ github.repository }}/shorts
+            dockerfile: ./pinchana-shorts/Dockerfile
 
     steps:
       - name: Checkout

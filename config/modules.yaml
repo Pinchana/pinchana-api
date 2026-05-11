@@ -32,3 +32,22 @@ modules:
       cache_volume: scraper-cache
       env:
         CACHE_MAX_SIZE_GB: "10.0"
+
+  shorts:
+    enabled: true
+    route_patterns: ["youtube.com/shorts", "www.youtube.com/shorts", "m.youtube.com/shorts"]
+    source:
+      type: local
+      path: /modules/pinchana-shorts
+    container:
+      dockerfile: Dockerfile
+      port: 8083
+      endpoint: http://localhost:8083
+      image_tag: pinchana-module-shorts
+      container_name: pinchana-shorts
+      network: container:gluetun
+      cache_volume: scraper-cache
+      env:
+        CACHE_MAX_SIZE_GB: "10.0"
+        YTDLP_COOKIES_DIR: "/run/pinchana-cookies"
+        SHORTS_MAX_MB_PER_MINUTE: "18.0"
