@@ -40,7 +40,7 @@ services:
       - scraper-cache:/app/cache
       - ./config:/app/config:ro
     environment:
-      - CONTAINER_MODE=true
+      - CONTAINER_MODE=false
       - MODULES_CONFIG=/app/config/modules.yaml
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
