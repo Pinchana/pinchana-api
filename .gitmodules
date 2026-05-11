@@ -13,3 +13,15 @@
 [submodule "pinchana-shorts"]
 	path = pinchana-shorts
 	url = https://github.com/Pinchana/pinchana-shorts.git
+[submodule "pinchana-soundcloud"]
+	path = pinchana-soundcloud
+	url = https://github.com/Pinchana/pinchana-soundcloud.git
+[submodule "pinchana-ytmusic"]
+	path = pinchana-ytmusic
+	url = https://github.com/Pinchana/pinchana-ytmusic.git
+[submodule "pinchana-spotify"]
+	path = pinchana-spotify
+	url = https://github.com/Pinchana/pinchana-spotify.git
+[submodule "pinchana-deezer"]
+	path = pinchana-deezer
+	url = https://github.com/Pinchana/pinchana-deezer.git

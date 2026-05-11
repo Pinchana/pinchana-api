@@ -36,6 +36,18 @@ jobs:
           - service: shorts
             image: ${{ github.repository }}/shorts
             dockerfile: ./pinchana-shorts/Dockerfile
+          - service: soundcloud
+            image: ${{ github.repository }}/soundcloud
+            dockerfile: ./pinchana-soundcloud/Dockerfile
+          - service: ytmusic
+            image: ${{ github.repository }}/ytmusic
+            dockerfile: ./pinchana-ytmusic/Dockerfile
+          - service: spotify
+            image: ${{ github.repository }}/spotify
+            dockerfile: ./pinchana-spotify/Dockerfile
+          - service: deezer
+            image: ${{ github.repository }}/deezer
+            dockerfile: ./pinchana-deezer/Dockerfile
 
     steps:
       - name: Checkout

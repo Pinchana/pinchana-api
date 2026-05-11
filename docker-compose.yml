@@ -11,6 +11,10 @@ services:
       - "${TIKTOK_HOST_PORT:-8081}:8081"                     # TikTok scraper
       - "${INSTAGRAM_HOST_PORT:-8082}:8082"                  # Instagram scraper
       - "${SHORTS_HOST_PORT:-8083}:8083"                     # YouTube Shorts scraper
+      - "${SOUNDCLOUD_HOST_PORT:-8084}:8084"                 # SoundCloud scraper
+      - "${YTMUSIC_HOST_PORT:-8085}:8085"                    # YouTube Music scraper
+      - "${SPOTIFY_HOST_PORT:-8086}:8086"                    # Spotify scraper
+      - "${DEEZER_HOST_PORT:-8087}:8087"                     # Deezer scraper
       - "${GLUETUN_CONTROL_HOST_PORT:-8000}:${GLUETUN_CONTROL_PORT:-8000}"  # Gluetun control server
     environment:
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-nordvpn}
@@ -51,9 +55,17 @@ services:
       - MODULE_TIKTOK_PORT=${MODULE_TIKTOK_PORT:-8081}
       - MODULE_INSTAGRAM_PORT=${MODULE_INSTAGRAM_PORT:-8082}
       - MODULE_SHORTS_PORT=${MODULE_SHORTS_PORT:-8083}
+      - MODULE_SOUNDCLOUD_PORT=${MODULE_SOUNDCLOUD_PORT:-8084}
+      - MODULE_YTMUSIC_PORT=${MODULE_YTMUSIC_PORT:-8085}
+      - MODULE_SPOTIFY_PORT=${MODULE_SPOTIFY_PORT:-8086}
+      - MODULE_DEEZER_PORT=${MODULE_DEEZER_PORT:-8087}
       - MODULE_TIKTOK_ENDPOINT=${MODULE_TIKTOK_ENDPOINT:-http://localhost:8081}
       - MODULE_INSTAGRAM_ENDPOINT=${MODULE_INSTAGRAM_ENDPOINT:-http://localhost:8082}
       - MODULE_SHORTS_ENDPOINT=${MODULE_SHORTS_ENDPOINT:-http://localhost:8083}
+      - MODULE_SOUNDCLOUD_ENDPOINT=${MODULE_SOUNDCLOUD_ENDPOINT:-http://localhost:8084}
+      - MODULE_YTMUSIC_ENDPOINT=${MODULE_YTMUSIC_ENDPOINT:-http://localhost:8085}
+      - MODULE_SPOTIFY_ENDPOINT=${MODULE_SPOTIFY_ENDPOINT:-http://localhost:8086}
+      - MODULE_DEEZER_ENDPOINT=${MODULE_DEEZER_ENDPOINT:-http://localhost:8087}
     restart: always
 
   tiktok:
@@ -105,6 +117,72 @@ services:
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
       - YTDLP_COOKIES_DIR=/run/pinchana-cookies
       - SHORTS_MAX_MB_PER_MINUTE=${SHORTS_MAX_MB_PER_MINUTE:-18.0}
+    restart: always
+
+  soundcloud:
+    image: ${SOUNDCLOUD_IMAGE:-ghcr.io/pinchana/pinchana-api/soundcloud:latest}
+    container_name: ${SOUNDCLOUD_CONTAINER_NAME:-pinchana-soundcloud}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - scraper-cache:/app/cache
+    environment:
+      - CACHE_PATH=/app/cache
+      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+    restart: always
+
+  ytmusic:
+    image: ${YTMUSIC_IMAGE:-ghcr.io/pinchana/pinchana-api/ytmusic:latest}
+    container_name: ${YTMUSIC_CONTAINER_NAME:-pinchana-ytmusic}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - scraper-cache:/app/cache
+    environment:
+      - CACHE_PATH=/app/cache
+      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+    restart: always
+
+  spotify:
+    image: ${SPOTIFY_IMAGE:-ghcr.io/pinchana/pinchana-api/spotify:latest}
+    container_name: ${SPOTIFY_CONTAINER_NAME:-pinchana-spotify}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - scraper-cache:/app/cache
+    environment:
+      - CACHE_PATH=/app/cache
+      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+    restart: always
+
+  deezer:
+    image: ${DEEZER_IMAGE:-ghcr.io/pinchana/pinchana-api/deezer:latest}
+    container_name: ${DEEZER_CONTAINER_NAME:-pinchana-deezer}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - scraper-cache:/app/cache
+    environment:
+      - CACHE_PATH=/app/cache
+      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
     restart: always
 
 volumes:

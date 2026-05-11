@@ -51,3 +51,73 @@ modules:
         CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
         YTDLP_COOKIES_DIR: "${YTDLP_COOKIES_DIR:-/run/pinchana-cookies}"
         SHORTS_MAX_MB_PER_MINUTE: "${SHORTS_MAX_MB_PER_MINUTE:-18.0}"
+
+  soundcloud:
+    enabled: true
+    route_patterns: ["soundcloud.com", "on.soundcloud.com"]
+    source:
+      type: local
+      path: /modules/pinchana-soundcloud
+    container:
+      dockerfile: Dockerfile
+      port: "${MODULE_SOUNDCLOUD_PORT:-8084}"
+      endpoint: "${MODULE_SOUNDCLOUD_ENDPOINT:-http://localhost:8084}"
+      image_tag: "${MODULE_SOUNDCLOUD_IMAGE_TAG:-pinchana-module-soundcloud}"
+      container_name: "${MODULE_SOUNDCLOUD_CONTAINER_NAME:-pinchana-soundcloud}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
+      env:
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
+
+  ytmusic:
+    enabled: true
+    route_patterns: ["music.youtube.com"]
+    source:
+      type: local
+      path: /modules/pinchana-ytmusic
+    container:
+      dockerfile: Dockerfile
+      port: "${MODULE_YTMUSIC_PORT:-8085}"
+      endpoint: "${MODULE_YTMUSIC_ENDPOINT:-http://localhost:8085}"
+      image_tag: "${MODULE_YTMUSIC_IMAGE_TAG:-pinchana-module-ytmusic}"
+      container_name: "${MODULE_YTMUSIC_CONTAINER_NAME:-pinchana-ytmusic}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
+      env:
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
+
+  spotify:
+    enabled: true
+    route_patterns: ["open.spotify.com"]
+    source:
+      type: local
+      path: /modules/pinchana-spotify
+    container:
+      dockerfile: Dockerfile
+      port: "${MODULE_SPOTIFY_PORT:-8086}"
+      endpoint: "${MODULE_SPOTIFY_ENDPOINT:-http://localhost:8086}"
+      image_tag: "${MODULE_SPOTIFY_IMAGE_TAG:-pinchana-module-spotify}"
+      container_name: "${MODULE_SPOTIFY_CONTAINER_NAME:-pinchana-spotify}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
+      env:
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
+        SPOTIFY_CLIENT_ID: "${SPOTIFY_CLIENT_ID}"
+        SPOTIFY_CLIENT_SECRET: "${SPOTIFY_CLIENT_SECRET}"
+
+  deezer:
+    enabled: true
+    route_patterns: ["deezer.com", "deezer.page.link", "link.deezer.com"]
+    source:
+      type: local
+      path: /modules/pinchana-deezer
+    container:
+      dockerfile: Dockerfile
+      port: "${MODULE_DEEZER_PORT:-8087}"
+      endpoint: "${MODULE_DEEZER_ENDPOINT:-http://localhost:8087}"
+      image_tag: "${MODULE_DEEZER_IMAGE_TAG:-pinchana-module-deezer}"
+      container_name: "${MODULE_DEEZER_CONTAINER_NAME:-pinchana-deezer}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
+      env:
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
