@@ -7,14 +7,14 @@ modules:
       path: /modules/pinchana-tiktok
     container:
       dockerfile: Dockerfile
-      port: 8081
-      endpoint: http://localhost:8081
-      image_tag: pinchana-module-tiktok
-      container_name: pinchana-tiktok
-      network: container:gluetun
-      cache_volume: scraper-cache
+      port: "${MODULE_TIKTOK_PORT:-8081}"
+      endpoint: "${MODULE_TIKTOK_ENDPOINT:-http://localhost:8081}"
+      image_tag: "${MODULE_TIKTOK_IMAGE_TAG:-pinchana-module-tiktok}"
+      container_name: "${MODULE_TIKTOK_CONTAINER_NAME:-pinchana-tiktok}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
       env:
-        CACHE_MAX_SIZE_GB: "10.0"
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
 
   instagram:
     enabled: true
@@ -24,14 +24,14 @@ modules:
       path: /modules/pinchana-inst
     container:
       dockerfile: Dockerfile
-      port: 8082
-      endpoint: http://localhost:8082
-      image_tag: pinchana-module-inst
-      container_name: pinchana-inst
-      network: container:gluetun
-      cache_volume: scraper-cache
+      port: "${MODULE_INSTAGRAM_PORT:-8082}"
+      endpoint: "${MODULE_INSTAGRAM_ENDPOINT:-http://localhost:8082}"
+      image_tag: "${MODULE_INSTAGRAM_IMAGE_TAG:-pinchana-module-inst}"
+      container_name: "${MODULE_INSTAGRAM_CONTAINER_NAME:-pinchana-inst}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
       env:
-        CACHE_MAX_SIZE_GB: "10.0"
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
 
   shorts:
     enabled: true
@@ -41,13 +41,13 @@ modules:
       path: /modules/pinchana-shorts
     container:
       dockerfile: Dockerfile
-      port: 8083
-      endpoint: http://localhost:8083
-      image_tag: pinchana-module-shorts
-      container_name: pinchana-shorts
-      network: container:gluetun
-      cache_volume: scraper-cache
+      port: "${MODULE_SHORTS_PORT:-8083}"
+      endpoint: "${MODULE_SHORTS_ENDPOINT:-http://localhost:8083}"
+      image_tag: "${MODULE_SHORTS_IMAGE_TAG:-pinchana-module-shorts}"
+      container_name: "${MODULE_SHORTS_CONTAINER_NAME:-pinchana-shorts}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
       env:
-        CACHE_MAX_SIZE_GB: "10.0"
-        YTDLP_COOKIES_DIR: "/run/pinchana-cookies"
-        SHORTS_MAX_MB_PER_MINUTE: "18.0"
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
+        YTDLP_COOKIES_DIR: "${YTDLP_COOKIES_DIR:-/run/pinchana-cookies}"
+        SHORTS_MAX_MB_PER_MINUTE: "${SHORTS_MAX_MB_PER_MINUTE:-18.0}"

@@ -126,10 +126,29 @@ curl http://localhost:8080/health
 |----------|----------|---------|-------------|
 | `WIREGUARD_PRIVATE_KEY` | **Yes** | — | Your VPN WireGuard private key. |
 | `SERVER_COUNTRIES` | No | — | Comma-separated list of countries (e.g., `Netherlands,Germany`). |
+| `GLUETUN_CONTAINER_NAME` | No | `gluetun` | Shared network namespace container name. |
+| `API_HOST_PORT` | No | `8080` | Host port for gateway API. |
+| `TIKTOK_HOST_PORT` | No | `8081` | Host port for TikTok module. |
+| `INSTAGRAM_HOST_PORT` | No | `8082` | Host port for Instagram module. |
+| `SHORTS_HOST_PORT` | No | `8083` | Host port for Shorts module. |
+| `GLUETUN_CONTROL_HOST_PORT` | No | `8000` | Host port for Gluetun control API. |
 | `CACHE_MAX_SIZE_GB` | No | `10.0` | Maximum size for the media cache. |
-| `CONTAINER_MODE` | No | `true` | Enable container management features in the gateway. |
+| `CONTAINER_MODE` | No | `false` | Enable runtime container management inside the server. |
 | `SHORTS_COOKIES_DIR` | No | `./secrets/yt-cookies` | Host directory containing YouTube cookies files (mounted read-only). |
 | `SHORTS_MAX_MB_PER_MINUTE` | No | `18.0` | Soft size target for Shorts output; bigger files are re-encoded. |
+
+### 🧩 Run Multiple Instances Without Editing Compose Files
+All docker-compose service names, container names, and published ports are `.env`-driven.
+
+For a second stack, create another env file (e.g. `.env.stack2`) and change at least:
+- `GLUETUN_CONTAINER_NAME`
+- `SERVER_CONTAINER_NAME`, `TIKTOK_CONTAINER_NAME`, `INSTAGRAM_CONTAINER_NAME`, `SHORTS_CONTAINER_NAME`
+- `API_HOST_PORT`, `TIKTOK_HOST_PORT`, `INSTAGRAM_HOST_PORT`, `SHORTS_HOST_PORT`, `GLUETUN_CONTROL_HOST_PORT`
+
+Then start with:
+```bash
+docker compose --env-file .env.stack2 up -d
+```
 
 ### 🔐 Secure YouTube Cookies Mount (read-only)
 1. Create a local secrets folder and keep it out of git:

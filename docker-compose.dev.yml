@@ -1,17 +1,17 @@
 services:
   gluetun:
-    image: qmcgaw/gluetun
-    container_name: gluetun
+    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun}
+    container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
     ports:
-      - "8080:8080"      # Server API
-      - "8081:8081"      # TikTok scraper
-      - "8082:8082"      # Instagram scraper
-      - "8083:8083"      # YouTube Shorts scraper
-      - "8000:8000"      # Gluetun control server
+      - "${API_HOST_PORT:-8080}:8080"                         # Server API
+      - "${TIKTOK_HOST_PORT:-8081}:8081"                     # TikTok scraper
+      - "${INSTAGRAM_HOST_PORT:-8082}:8082"                  # Instagram scraper
+      - "${SHORTS_HOST_PORT:-8083}:8083"                     # YouTube Shorts scraper
+      - "${GLUETUN_CONTROL_HOST_PORT:-8000}:${GLUETUN_CONTROL_PORT:-8000}"  # Gluetun control server
     environment:
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-nordvpn}
       - VPN_TYPE=wireguard
@@ -19,7 +19,7 @@ services:
       - SERVER_COUNTRIES=${SERVER_COUNTRIES:-}
       - HTTP_CONTROL_SERVER_API_KEY=${GLUETUN_API_KEY:-secret-key}
       - HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={"auth":"apikey","apikey":"${GLUETUN_API_KEY:-secret-key}"}
-      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_ADDRESS=:${GLUETUN_CONTROL_PORT:-8000}
     healthcheck:
       test: ["CMD-SHELL", "/gluetun-entrypoint healthcheck"]
       interval: 10s
@@ -32,8 +32,8 @@ services:
     build:
       context: .
       dockerfile: ./pinchana-server/Dockerfile
-    container_name: pinchana-server-dev
-    network_mode: container:gluetun
+    container_name: ${SERVER_CONTAINER_NAME:-pinchana-server-dev}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
     depends_on:
       gluetun:
         condition: service_healthy
@@ -42,19 +42,26 @@ services:
       - scraper-cache:/app/cache
       - ./config:/app/config:ro
     environment:
-      - CONTAINER_MODE=true
+      - CONTAINER_MODE=${CONTAINER_MODE:-true}
       - MODULES_CONFIG=/app/config/modules.yaml
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:8000
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+      - MODULE_NETWORK=container:${GLUETUN_CONTAINER_NAME:-gluetun}
+      - MODULE_TIKTOK_PORT=${MODULE_TIKTOK_PORT:-8081}
+      - MODULE_INSTAGRAM_PORT=${MODULE_INSTAGRAM_PORT:-8082}
+      - MODULE_SHORTS_PORT=${MODULE_SHORTS_PORT:-8083}
+      - MODULE_TIKTOK_ENDPOINT=${MODULE_TIKTOK_ENDPOINT:-http://localhost:8081}
+      - MODULE_INSTAGRAM_ENDPOINT=${MODULE_INSTAGRAM_ENDPOINT:-http://localhost:8082}
+      - MODULE_SHORTS_ENDPOINT=${MODULE_SHORTS_ENDPOINT:-http://localhost:8083}
 
   tiktok:
     build:
       context: .
       dockerfile: ./pinchana-tiktok/Dockerfile
-    container_name: pinchana-tiktok-dev
-    network_mode: container:gluetun
+    container_name: ${TIKTOK_CONTAINER_NAME:-pinchana-tiktok-dev}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
     depends_on:
       gluetun:
         condition: service_healthy
@@ -63,15 +70,15 @@ services:
     environment:
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:8000
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
 
   instagram:
     build:
       context: .
       dockerfile: ./pinchana-inst/Dockerfile
-    container_name: pinchana-inst-dev
-    network_mode: container:gluetun
+    container_name: ${INSTAGRAM_CONTAINER_NAME:-pinchana-inst-dev}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
     depends_on:
       gluetun:
         condition: service_healthy
@@ -80,15 +87,15 @@ services:
     environment:
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:8000
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
 
   shorts:
     build:
       context: .
       dockerfile: ./pinchana-shorts/Dockerfile
-    container_name: pinchana-shorts-dev
-    network_mode: container:gluetun
+    container_name: ${SHORTS_CONTAINER_NAME:-pinchana-shorts-dev}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
     depends_on:
       gluetun:
         condition: service_healthy
@@ -98,7 +105,7 @@ services:
     environment:
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:8000
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
       - YTDLP_COOKIES_DIR=/run/pinchana-cookies
       - SHORTS_MAX_MB_PER_MINUTE=${SHORTS_MAX_MB_PER_MINUTE:-18.0}
