@@ -43,19 +43,14 @@ graph TD
     Gateway -->|Route by Pattern| Modules{Module Registry}
     
     subgraph "Internal Network (VPN Secured)"
-        Modules -->|Proxy| TikTok[TikTok Scraper :8081]
-        Modules -->|Proxy| Instagram[Instagram Scraper :8082]
-        Modules -->|Proxy| Shorts[YouTube Shorts Scraper :8083]
+        Modules -->|Proxy| Scraper[Scraper Endproint]
         
-        TikTok -->|Traffic| Gluetun[Gluetun VPN]
-        Instagram -->|Traffic| Gluetun
-        Shorts -->|Traffic| Gluetun
+        Scraper -->|Traffic| Gluetun[Gluetun VPN]
     end
     
     Gluetun -->|Encrypted Tunnel| Internet((Internet))
     
-    TikTok -.->|Save| Cache[(LRU Media Cache)]
-    Instagram -.->|Save| Cache
+    Scraper -.->|Save| Cache[(LRU Media Cache)]
 ```
 
 - **Pinchana Server:** FastAPI gateway. Manages module discovery, request routing, and optional container lifecycle.
