@@ -8,6 +8,7 @@ on:
       - '.github/workflows/docker-publish.yml'
       - 'docker-compose.yml'
       - 'pinchana-*/**'
+      - 'pinchana-*'
   workflow_dispatch:
     inputs:
       services:
