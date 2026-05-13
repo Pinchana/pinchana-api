@@ -28,3 +28,6 @@
 [submodule "pinchana-threads"]
 	path = pinchana-threads
 	url = https://github.com/Pinchana/pinchana-threads.git
+[submodule "pinchana-twitter"]
+	path = pinchana-twitter
+	url = https://github.com/Pinchana/pinchana-twitter.git

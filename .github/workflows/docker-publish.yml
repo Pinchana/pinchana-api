@@ -52,7 +52,7 @@ jobs:
 
           # For tags, build everything
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
             echo "Tag push — building all services"
             exit 0
           fi
@@ -64,14 +64,14 @@ jobs:
 
           # If workflow or compose changed, build everything
           if echo "$CHANGED" | grep -qE '^\.github/workflows/docker-publish\.yml|^docker-compose\.yml$'; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
             echo "Workflow/compose changed — building all services"
             exit 0
           fi
 
           # If pinchana-core changed, build everything (all services depend on it)
           if echo "$CHANGED" | grep -q '^pinchana-core/'; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
             echo "pinchana-core changed — building all services"
             exit 0
           fi
@@ -79,7 +79,7 @@ jobs:
           # Build only services whose submodules changed
           matrix="{"include": ["
           first=1
-          for svc in server tiktok instagram shorts soundcloud ytmusic spotify deezer threads; do
+          for svc in server tiktok instagram shorts soundcloud ytmusic spotify deezer threads twitter; do
             dir="pinchana-${svc}"
             # Match both dir/ (files inside) and dir itself (submodule pointer update)
             if echo "$CHANGED" | grep -qE "^${dir}/|^${dir}$"; then
@@ -136,6 +136,7 @@ jobs:
             spotify)    echo "dockerfile=./pinchana-spotify/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/spotify" >> $GITHUB_OUTPUT ;;
             deezer)     echo "dockerfile=./pinchana-deezer/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/deezer" >> $GITHUB_OUTPUT ;;
             threads)    echo "dockerfile=./pinchana-threads/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/threads" >> $GITHUB_OUTPUT ;;
+            twitter)    echo "dockerfile=./pinchana-twitter/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/twitter" >> $GITHUB_OUTPUT ;;
           esac
 
       - name: Extract metadata

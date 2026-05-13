@@ -138,3 +138,20 @@ modules:
       cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
       env:
         CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
+
+  twitter:
+    enabled: true
+    route_patterns: ["x.com", "twitter.com", "vxtwitter.com", "fxtwitter.com"]
+    source:
+      type: local
+      path: /modules/pinchana-twitter
+    container:
+      dockerfile: Dockerfile
+      port: "${MODULE_TWITTER_PORT:-8089}"
+      endpoint: "${MODULE_TWITTER_ENDPOINT:-http://localhost:8089}"
+      image_tag: "${MODULE_TWITTER_IMAGE_TAG:-pinchana-module-twitter}"
+      container_name: "${MODULE_TWITTER_CONTAINER_NAME:-pinchana-twitter}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
+      env:
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
