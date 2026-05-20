@@ -70,7 +70,7 @@ jobs:
           fi
 
           # If pinchana-core changed, build everything (all services depend on it)
-          if echo "$CHANGED" | grep -q '^pinchana-core/'; then
+          if echo "$CHANGED" | grep -qE '^pinchana-core/|^pinchana-core$'; then
             echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
             echo "pinchana-core changed — building all services"
             exit 0
