@@ -172,7 +172,7 @@ jobs:
             fi
           }
 
-          if [[ "${{ github.ref }}" == "refs/heads/stable" || "${{ github.event.inputs.publish_stable }}" == "true" ]]; then
+          if [[ "${{ github.ref }}" == "refs/heads/stable" || "${GITHUB_REF_TYPE}" == "tag" || "${{ github.event.inputs.publish_stable }}" == "true" ]]; then
             add_tag "stable"
           fi
 
