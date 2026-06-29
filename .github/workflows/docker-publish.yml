@@ -2,7 +2,7 @@ name: Publish Docker images
 
 on:
   push:
-    branches: [main]
+    branches: [main, stable]
     tags: ['v*.*.*']
     paths:
       - '.github/workflows/docker-publish.yml'
@@ -15,6 +15,15 @@ on:
         description: 'Comma-separated list of services to build (empty = auto-detect)'
         required: false
         default: ''
+      release_version:
+        description: 'Optional Docker tag to publish, e.g. 0.2.beta'
+        required: false
+        default: ''
+      publish_stable:
+        description: 'Also publish the stable Docker tag'
+        required: false
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ghcr.io
@@ -37,9 +46,11 @@ jobs:
           # If manual trigger with explicit services, use those
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.services }}" ]]; then
             IFS=',' read -ra SERVICES <<< "${{ github.event.inputs.services }}"
-            matrix="{"include": ["
+            matrix='{"include": ['
             first=1
             for svc in "${SERVICES[@]}"; do
+              svc="$(echo "$svc" | xargs)"
+              [[ -z "$svc" ]] && continue
               [[ $first -eq 0 ]] && matrix+=","
               matrix+="{\"service\": \"$svc\"}"
               first=0
@@ -47,6 +58,13 @@ jobs:
             matrix+="]}"
             echo "matrix=$matrix" >> $GITHUB_OUTPUT
             echo "Manual build for: ${SERVICES[*]}"
+            exit 0
+          fi
+
+          # Manual stable/versioned releases default to all services.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ( "${{ github.event.inputs.publish_stable }}" == "true" || -n "${{ github.event.inputs.release_version }}" ) ]]; then
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
+            echo "Manual release build — building all services"
             exit 0
           fi
 
@@ -77,7 +95,7 @@ jobs:
           fi
 
           # Build only services whose submodules changed
-          matrix="{"include": ["
+          matrix='{"include": ['
           first=1
           for svc in server tiktok instagram shorts soundcloud ytmusic spotify deezer threads twitter; do
             dir="pinchana-${svc}"
@@ -141,6 +159,37 @@ jobs:
             twitter)    echo "dockerfile=./pinchana-twitter/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/twitter" >> $GITHUB_OUTPUT ;;
           esac
 
+      - name: Compute release tags
+        id: release-tags
+        run: |
+          image="${{ env.REGISTRY }}/${{ steps.map.outputs.image }}"
+          tags=""
+
+          add_tag() {
+            local tag="$1"
+            if [[ -n "$tag" ]]; then
+              tags+="${image}:${tag}"$'\n'
+            fi
+          }
+
+          if [[ "${{ github.ref }}" == "refs/heads/stable" || "${{ github.event.inputs.publish_stable }}" == "true" ]]; then
+            add_tag "stable"
+          fi
+
+          if [[ -n "${{ github.event.inputs.release_version }}" ]]; then
+            add_tag "${{ github.event.inputs.release_version }}"
+          fi
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            add_tag "${GITHUB_REF_NAME#v}"
+          fi
+
+          {
+            echo "tags<<EOF"
+            printf "%s" "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -157,7 +206,9 @@ jobs:
           context: .
           file: ${{ steps.map.outputs.dockerfile }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.release-tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.map.outputs.image }}:build-cache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.map.outputs.image }}:build-cache,mode=max,ignore-error=true

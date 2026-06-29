@@ -2,3 +2,8 @@
 .env.*
 !.env.example
 secrets/
+
+# Python
+__pycache__/
+*.py[oc]
+*.py[cod]
