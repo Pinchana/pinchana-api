@@ -1,74 +1,62 @@
-# AGENTS.md
+# Repository Guidelines
 
-Repo-wide guide for OpenCode agents. Per-module details live in each submodule; `pinchana-inst/AGENTS.md` exists but is **stale** (describes a removed `app/` layout) — trust the source tree over it.
+## Project Structure & Module Organization
 
-## What this repo is
+This is a Docker Compose orchestration repo for the Pinchana scraping gateway. The root is not a Python package and has no root task runner. Each `pinchana-*` directory is an independent git submodule with its own `pyproject.toml`, `uv.lock`, `Dockerfile`, and `src/pinchana_<name>/` package. `pinchana-core` is shared by every service.
 
-- A **Docker Compose orchestration repo** for a unified scraping gateway. The root has **no Python project, no Makefile, no task runner, no `opencode.json`**. Don't look for root-level build/test/lint commands — there are none.
-- Each `pinchana-*` directory is an **independent git submodule** (see `.gitmodules`) with its own `pyproject.toml`, `uv.lock`, and `Dockerfile`. `pinchana-core` is the shared library every other module depends on.
-- Clone with `git clone --recursive`; recover missing submodules with `git submodule update --init --recursive`.
+Ports: server `8080`, tiktok `8081`, inst `8082`, shorts `8083`, soundcloud `8084`, ytmusic `8085`, spotify `8086`, deezer `8087`, threads `8088`, twitter `8089`, gluetun control `8000`.
 
-## Per-module development (uv, Python 3.13+)
+## Build, Test, and Development Commands
 
-Work **inside the submodule directory**, not the repo root:
+Work inside a submodule for Python development:
 
 ```bash
 cd pinchana-<name>
-uv sync                                              # requires ../pinchana-core present (local path dep)
-uv run uvicorn pinchana_<name>.main:app --reload     # entrypoint pattern; underscore = package name
+uv sync
+uv run uvicorn pinchana_<name>.main:app --reload
+uv run python -c "import pinchana_<name>; print('ok')"
 ```
 
-- All submodules use a `src/pinchana_<name>/` layout. The FastAPI app object is `pinchana_<name>.main:app`.
-- `pinchana-core` is wired via `[tool.uv.sources] pinchana-core = { path = "../pinchana-core" }` in every submodule. `uv sync` fails if `pinchana-core` isn't checked out beside the submodule.
-- **Changing `pinchana-core` forces a full rebuild of every service** (CI treats it as a global dependency).
-
-## Docker builds: context is the repo root
-
-Every Dockerfile copies `pinchana-core/` then `pinchana-<name>/` using paths relative to the repo root, so you **must build from the repo root**:
+Build Docker images from the repo root because Dockerfiles copy `pinchana-core/` and the target service:
 
 ```bash
-docker build -f pinchana-tiktok/Dockerfile -t pinchana-tiktok .   # from repo root
+docker build -f pinchana-inst/Dockerfile -t pinchana-inst .
+docker compose up -d
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-Building from inside the submodule directory breaks the `COPY` paths.
+Both compose files require `.env` with `WIREGUARD_PRIVATE_KEY`; start from `.env.example`.
 
-## Running the stack
+## Coding Style & Naming Conventions
 
-- `docker-compose.yml` — prebuilt GHCR images (prod). `docker compose up -d`.
-- `docker-compose.dev.yml` — build from source. `docker compose -f docker-compose.dev.yml up -d --build`.
-- Both **require `.env` with `WIREGUARD_PRIVATE_KEY`** (NordVPN NordLynx). Copy from `.env.example`.
+Use Python 3.13+, async I/O for network work, and package names matching `pinchana_<name>`. FastAPI apps live at `pinchana_<name>.main:app`. Never commit `__pycache__/` or `*.pyc`. There is no repo-wide formatter, Ruff, mypy, or lint config, so do not invent root lint commands.
 
-## Networking: gluetun owns everything
+## Testing Guidelines
 
-- All services run with `network_mode: container:gluetun`. gluetun publishes **all** ports: `8080` server, `8081`-`8089` modules, `8000` gluetun control. Scraper/server containers have **no `ports:` of their own** and no direct internet — all egress goes through the VPN.
-- Don't add `ports:` to scraper services; add new ports to the `gluetun` service and to `.env.example`.
-- **Never `docker restart gluetun`** — it wipes VPN creds from memory and causes `AUTH_ERROR`. Use `docker compose up -d --force-recreate gluetun`. Programmatic rotation via `POST /admin/vpn/rotate` is safe.
+Tests are sparse. `pinchana-inst` has pytest coverage; live Instagram cases are skipped unless enabled:
 
-## Server routing model
+```bash
+cd pinchana-inst
+uv run pytest
+PINCHANA_INST_LIVE=1 uv run pytest
+```
 
-`pinchana-server` resolves `/scrape` by matching the URL against `route_patterns` in `config/modules.yaml`:
+For other modules, verify by importing the package or running the service locally.
 
-- `CONTAINER_MODE=true` (dev default): server builds/start/stops scraper containers itself via the Docker socket (`/var/run/docker.sock` mounted), reading `config/modules.yaml`.
-- `CONTAINER_MODE=false` (prod compose default): server forwards `/scrape` to each module's HTTP `endpoint` (from `MODULE_*_ENDPOINT` env vars); modules are managed by compose.
-- Optional in-process plugins: set `IN_PROCESS_PLUGINS=comma,of,importable,names` to `importlib.import_module` scrapers directly into the server (mounts their routers under `/<name>`).
+## CI, Releases & Docker Tags
 
-## Adding a new module touches many files
+`.github/workflows/docker-publish.yml` builds GHCR images at `ghcr.io/pinchana/pinchana-api/<service>`. Pushes to `main` publish `latest`; pushes to `stable` publish `stable`; release tags like `v0.2.beta` publish both `0.2.beta` and `stable`. Manual dispatch supports `services`, `release_version`, and `publish_stable`.
 
-1. New `pinchana-<name>/` submodule with `src/pinchana_<name>/main.py` exposing `app`.
-2. `config/modules.yaml` — add `route_patterns`, port, endpoint.
-3. `docker-compose.yml` **and** `docker-compose.dev.yml` — add a service with `network_mode: container:gluetun`, `depends_on: gluetun`, and the `scraper-cache` volume.
-4. `.env.example` — add `*_HOST_PORT`, `MODULE_*_PORT`, `MODULE_*_ENDPOINT`, `*_CONTAINER_NAME`.
-5. `.github/workflows/docker-publish.yml` — add the service to the `detect` job list **and** the `map` step; add to `.gitmodules`.
+Python package versions use PEP 440, so the `0.2.beta` Docker release is represented in submodule `pyproject.toml` files as `0.2b0`.
 
-Port assignments: server 8080, tiktok 8081, inst 8082, shorts 8083, soundcloud 8084, ytmusic 8085, spotify 8086, deezer 8087, threads 8088, twitter 8089, gluetun control 8000.
+## Networking & Configuration
 
-## Tooling & tests
+Runtime services use `network_mode: container:gluetun`; do not add `ports:` to scraper services. Add ports only to `gluetun` and `.env.example`. Never run `docker restart gluetun`; it clears VPN credentials. Use:
 
-- **No lint, typecheck, ruff, mypy, or formatter config exists anywhere.** There is no CI test/lint job. CI (`.github/workflows/docker-publish.yml`) only builds and pushes Docker images to `ghcr.io/pinchana/pinchana-api/<service>:latest`. Don't invent `npm run lint`-style commands; if asked to verify, run the app or `uv run python -c "import ..."`.
-- CI rebuilds selectively on push to `main` (only services whose submodule changed); changes to `pinchana-core/`, `docker-compose.yml`, or the workflow rebuild everything; tags `v*.*.*` build all services.
-- **Tests are effectively absent.** Only `pinchana-inst` has a `tests/` dir, and `tests/test_scrapers.py` is currently **broken** — it imports `from app.scraper` / `from app.playwright_scraper`, but the package moved to `src/pinchana_inst/` (no `app/` dir, no `playwright_scraper` module). It will fail at collection. The tests were live integration tests against real Instagram requiring a Gluetun sidecar (they `pytest.skip()` on 403/429). `pinchana-threads` and `pinchana-twitter` declare pytest dev deps but ship no test files.
+```bash
+docker compose up -d --force-recreate gluetun
+```
 
-## Module-specific runtime needs
+## Commit & Pull Request Guidelines
 
-- **shorts**: requires `ffmpeg` (installed in its Dockerfile) and YouTube cookies mounted read-only from `SHORTS_COOKIES_DIR` (default `./secrets/yt-cookies`) → `/run/pinchana-cookies`. `SHORTS_MAX_MB_PER_MINUTE` re-encodes oversized output.
-- **spotify**: requires `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in `.env`.
+History uses short imperative or conventional-style messages such as `fix: ...`, `feat: ...`, and `Prepare 0.2 beta release`. For submodule changes, commit and push inside the submodule first, then commit the updated submodule pointer in the root repo. PRs should describe affected services, runtime/config changes, and verification commands.

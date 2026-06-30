@@ -1,212 +1,168 @@
-# 🐘 Pinchana API
+# Pinchana API
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/release/python-3130/)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![Publish Docker images](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml)
 
-**Pinchana** is a unified, high-performance scraping gateway designed to extract media from TikTok, Instagram, and YouTube Shorts reliably. It solves common scraping challenges by routing all traffic through a rotating VPN (via [Gluetun](https://github.com/qdm12/gluetun)) and employing advanced bypass techniques.
+Pinchana is a Docker Compose based scraping gateway. A central FastAPI server accepts one `/scrape` request shape, detects the target platform, and forwards the job to a specialized scraper service. All services share Gluetun's network namespace, so outbound traffic goes through the VPN.
 
----
+## Supported Services
 
-## 📖 Table of Contents
+| Service | Port | Routes |
+| --- | ---: | --- |
+| server | 8080 | Gateway API |
+| tiktok | 8081 | `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com` |
+| instagram | 8082 | `instagram.com`, `instagr.am` |
+| shorts | 8083 | `youtube.com/shorts` |
+| soundcloud | 8084 | `soundcloud.com`, `on.soundcloud.com` |
+| ytmusic | 8085 | `music.youtube.com` |
+| spotify | 8086 | `open.spotify.com` |
+| deezer | 8087 | `deezer.com`, Deezer link domains |
+| threads | 8088 | `threads.net` |
+| twitter | 8089 | `x.com`, `twitter.com`, `vxtwitter.com`, `fxtwitter.com` |
 
-- [✨ Key Features](#-key-features)
-- [🏗 Architecture](#-architecture)
-- [📂 Repository Structure](#-repository-structure)
-- [🚀 Quick Start](#-quick-start)
-- [⚙️ Configuration](#-configuration)
-- [📡 API Usage](#-api-usage)
-- [🛠 Development](#-development)
-- [📜 License](#-license)
+Gluetun's control API is exposed on port `8000`.
 
----
+## Repository Layout
 
-## ✨ Key Features
+This root repository only orchestrates submodules and Docker Compose. Each `pinchana-*` directory is an independent Python package with `pyproject.toml`, `uv.lock`, `Dockerfile`, and `src/pinchana_<name>/`.
 
-- **🎯 Unified API:** A single gateway (`/scrape`) to handle different social media platforms.
-- **🛡 VPN-First Design:** Zero-trust networking. Scrapers have no direct internet access; all traffic *must* exit through the VPN.
-- **🔄 Smart Rotation:** Automatic IP rotation when rate limits (403/429) are detected.
-- **💾 Global Media Cache:** Persistent LRU (Least Recently Used) cache for images and videos to save bandwidth and avoid re-scraping.
-- **🧩 Extensible Architecture:** Easily add new scraper modules by defining simple route patterns.
-- **🐳 Container Managed:** Optional auto-lifecycle management for scraper containers via the gateway.
+`pinchana-core` contains shared models, storage, music helpers, Docker orchestration helpers, and Gluetun control logic. Every service depends on it through a local uv path dependency.
 
----
+## Quick Start
 
-## 🏗 Architecture
+Clone with submodules:
 
-Pinchana follows a modular architecture where a central gateway routes requests to specialized scraper modules.
-
-```mermaid
-graph TD
-    Client[Client] -->|POST /scrape| Gateway[Pinchana Server :8080]
-    Gateway -->|Route by Pattern| Modules{Module Registry}
-    
-    subgraph "Internal Network (VPN Secured)"
-        Modules -->|Proxy| Scraper[Scraper Endproint]
-        
-        Scraper -->|Traffic| Gluetun[Gluetun VPN]
-    end
-    
-    Gluetun -->|Encrypted Tunnel| Internet((Internet))
-    
-    Scraper -.->|Save| Cache[(LRU Media Cache)]
-```
-
-- **Pinchana Server:** FastAPI gateway. Manages module discovery, request routing, and optional container lifecycle.
-- **Scraper Modules:** Standalone services (TikTok, Instagram, YouTube Shorts) that perform the actual extraction.
-- **Gluetun:** VPN sidecar ensuring all outgoing traffic is protected and rotatable.
-- **Pinchana Core:** Shared library providing models, storage logic, and VPN signaling.
-
----
-
-## 📂 Repository Structure
-
-The project is organized as a monorepo with submodules for each component:
-
-| Directory | Component | Description |
-|-----------|-----------|-------------|
-| [`pinchana-server/`](./pinchana-server) | **Gateway** | Central FastAPI router and module manager. |
-| [`pinchana-core/`](./pinchana-core) | **Core** | Shared logic: LRU Cache, VPN control, Docker orchestration. |
-| [`pinchana-inst/`](./pinchana-inst) | **Instagram** | High-performance scraper (GraphQL + Playwright fallback). |
-| [`pinchana-tiktok/`](./pinchana-tiktok) | **TikTok** | Custom yt-dlp based extractor for TikTok media. |
-| [`pinchana-shorts/`](./pinchana-shorts) | **YouTube Shorts** | yt-dlp based extractor with secure cookie loading and size-aware MP4 output. |
-| `config/` | **Config** | Runtime configuration (e.g., `modules.yaml`). |
-
----
-
-## 🚀 Quick Start
-
-### 1. Clone the Repository
-Ensure you clone with submodules to get all components:
 ```bash
 git clone --recursive https://github.com/Pinchana/pinchana-api.git
 cd pinchana-api
 ```
 
-### 2. Configure Environment
-Create a `.env` file from the example:
+Create configuration:
+
 ```bash
 cp .env.example .env
 ```
-Add your **NordVPN WireGuard Private Key** (NordLynx):
-```env
-WIREGUARD_PRIVATE_KEY=your_private_key_here
-```
-*(See [Configuration](#-extracting-your-nordvpn-wireguard-private-key) for instructions on how to get this key.)*
 
-### 3. Run with Docker Compose
-To run using pre-built images from GHCR (default):
+Set at least:
+
+```env
+WIREGUARD_PRIVATE_KEY=your_nordlynx_private_key
+```
+
+For Spotify scraping, also set:
+
+```env
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
+```
+
+Run prebuilt GHCR images:
+
 ```bash
 docker compose up -d
 ```
-To build and run locally from source:
+
+Build from source instead:
+
 ```bash
 docker compose -f docker-compose.dev.yml up -d --build
 ```
-This will start the Gateway, Scrapers, and VPN.
 
-### 4. Verify Installation
+Check health:
+
 ```bash
 curl http://localhost:8080/health
 ```
 
----
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `WIREGUARD_PRIVATE_KEY` | **Yes** | — | Your VPN WireGuard private key. |
-| `SERVER_COUNTRIES` | No | — | Comma-separated list of countries (e.g., `Netherlands,Germany`). |
-| `GLUETUN_CONTAINER_NAME` | No | `gluetun` | Shared network namespace container name. |
-| `API_HOST_PORT` | No | `8080` | Host port for gateway API. |
-| `TIKTOK_HOST_PORT` | No | `8081` | Host port for TikTok module. |
-| `INSTAGRAM_HOST_PORT` | No | `8082` | Host port for Instagram module. |
-| `SHORTS_HOST_PORT` | No | `8083` | Host port for Shorts module. |
-| `GLUETUN_CONTROL_HOST_PORT` | No | `8000` | Host port for Gluetun control API. |
-| `CACHE_MAX_SIZE_GB` | No | `10.0` | Maximum size for the media cache. |
-| `CONTAINER_MODE` | No | `false` | Enable runtime container management inside the server. |
-| `SHORTS_COOKIES_DIR` | No | `./secrets/yt-cookies` | Host directory containing YouTube cookies files (mounted read-only). |
-| `SHORTS_MAX_MB_PER_MINUTE` | No | `18.0` | Soft size target for Shorts output; bigger files are re-encoded. |
-
-### 🧩 Run Multiple Instances Without Editing Compose Files
-All docker-compose service names, container names, and published ports are `.env`-driven.
-
-For a second stack, create another env file (e.g. `.env.stack2`) and change at least:
-- `GLUETUN_CONTAINER_NAME`
-- `SERVER_CONTAINER_NAME`, `TIKTOK_CONTAINER_NAME`, `INSTAGRAM_CONTAINER_NAME`, `SHORTS_CONTAINER_NAME`
-- `API_HOST_PORT`, `TIKTOK_HOST_PORT`, `INSTAGRAM_HOST_PORT`, `SHORTS_HOST_PORT`, `GLUETUN_CONTROL_HOST_PORT`
-
-Then start with:
-```bash
-docker compose --env-file .env.stack2 up -d
-```
-
-### 🔐 Secure YouTube Cookies Mount (read-only)
-1. Create a local secrets folder and keep it out of git:
-   ```bash
-   mkdir -p ./secrets/yt-cookies
-   chmod 700 ./secrets ./secrets/yt-cookies
-   ```
-2. Place your exported Netscape cookie file there (e.g. `youtube.com_cookies.txt`) and tighten file permissions:
-   ```bash
-   chmod 600 ./secrets/yt-cookies/*.txt
-   ```
-3. Keep `SHORTS_COOKIES_DIR=./secrets/yt-cookies` in `.env`.
-
-The Shorts module mounts this folder as read-only and copies cookies into an ephemeral `/tmp` file for yt-dlp runtime use, so the mounted source is not modified.
-
-### 🔑 Extracting your NordVPN WireGuard Private Key
-1. Connect to NordVPN using the CLI: `nordvpn connect`.
-2. Run: `sudo wg show nordlynx private-key`.
-3. Copy the output to your `.env` file.
-
----
-
-## 📡 API Usage
-
-### Scrape a URL
-The gateway automatically detects the platform based on the URL.
+## API Usage
 
 ```bash
 curl -X POST http://localhost:8080/scrape \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://www.tiktok.com/@username/video/1234567890"}'
-
-# YouTube Shorts example
-curl -X POST http://localhost:8080/scrape \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://www.youtube.com/shorts/VIDEO_ID"}'
+  -d '{"url": "https://www.instagram.com/p/SHORTCODE/"}'
 ```
 
-### Admin Endpoints
-- `POST /admin/vpn/rotate`: Trigger an immediate IP change.
-- `GET /admin/vpn/status`: Check current VPN health and IP.
-- `GET /admin/modules`: List active scraper modules.
+The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, and Instagram URLs.
 
----
+Admin endpoints:
 
-## 🛠 Development
+- `GET /health`
+- `GET /admin/vpn/status`
+- `POST /admin/vpn/rotate`
+- `GET /admin/modules`
 
-### Using `uv` for Package Management
-Each sub-project is a standalone Python package managed by [uv](https://github.com/astral-sh/uv).
+## Configuration Notes
+
+All scraper and server containers use:
+
+```yaml
+network_mode: container:gluetun
+```
+
+Do not add `ports:` to scraper services. Publish new service ports on `gluetun` and mirror them in `.env.example`.
+
+Never run `docker restart gluetun`; it can clear VPN credentials and cause `AUTH_ERROR`. Recreate it instead:
 
 ```bash
-cd pinchana-server
+docker compose up -d --force-recreate gluetun
+```
+
+Shorts can use YouTube cookies from `SHORTS_COOKIES_DIR` mounted read-only to `/run/pinchana-cookies`. `SHORTS_MAX_MB_PER_MINUTE` controls optional MP4 re-encoding for oversized output.
+
+## Development
+
+Work inside submodules:
+
+```bash
+cd pinchana-inst
 uv sync
-uv run uvicorn src.pinchana_server.main:app --reload
+uv run uvicorn pinchana_inst.main:app --reload
+uv run python -c "import pinchana_inst; print('ok')"
 ```
 
-### Adding a New Module
-1. Create a new directory (e.g., `pinchana-youtube`).
-2. Implement the `/scrape` endpoint returning the standard `ScrapeResponse` model.
-3. Add the module configuration to `config/modules.yaml`.
+Run Instagram tests:
 
----
+```bash
+cd pinchana-inst
+uv run pytest
+PINCHANA_INST_LIVE=1 uv run pytest
+```
 
-## 📜 License
+Docker builds must use the repo root as build context:
 
-Distributed under the MIT License. See `LICENSE` for more information.
+```bash
+docker build -f pinchana-inst/Dockerfile -t pinchana-inst .
+```
+
+## Releases and Images
+
+Images are published to:
+
+```text
+ghcr.io/pinchana/pinchana-api/<service>:<tag>
+```
+
+Current tag policy:
+
+- Push to `main`: publishes `latest`.
+- Push to `stable`: publishes `stable`.
+- Push tag such as `v0.2.beta`: publishes `0.2.beta` and `stable`.
+- Manual workflow dispatch supports explicit `services`, `release_version`, and `publish_stable`.
+
+Python package versions use PEP 440. The `0.2.beta` Docker release is represented in submodule `pyproject.toml` files as `0.2b0`.
+
+## Adding a Module
+
+Adding a service requires coordinated changes:
+
+1. Add a new `pinchana-<name>` submodule with `src/pinchana_<name>/main.py`.
+2. Add routing and container metadata in `config/modules.yaml`.
+3. Add services to `docker-compose.yml` and `docker-compose.dev.yml`.
+4. Add ports, endpoints, and container names to `.env.example`.
+5. Add workflow detection and Dockerfile mapping in `.github/workflows/docker-publish.yml`.
+
+## License
+
+MIT. See `LICENSE`.
