@@ -1,5 +1,6 @@
 services:
   gluetun:
+    profiles: ["vpn"]
     image: ${GLUETUN_IMAGE:-qmcgaw/gluetun}
     container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
     cap_add:
@@ -39,22 +40,20 @@ services:
       context: .
       dockerfile: ./pinchana-server/Dockerfile
     container_name: ${SERVER_CONTAINER_NAME:-pinchana-server-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${API_HOST_PORT:-8080}:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - scraper-cache:/app/cache
       - ./config:/app/config:ro
     environment:
-      - CONTAINER_MODE=${CONTAINER_MODE:-true}
+      - CONTAINER_MODE=${CONTAINER_MODE:-false}
+      - VPN_ENABLED=false
       - MODULES_CONFIG=/app/config/modules.yaml
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-      - MODULE_NETWORK=container:${GLUETUN_CONTAINER_NAME:-gluetun}
       - MODULE_TIKTOK_PORT=${MODULE_TIKTOK_PORT:-8081}
       - MODULE_INSTAGRAM_PORT=${MODULE_INSTAGRAM_PORT:-8082}
       - MODULE_SHORTS_PORT=${MODULE_SHORTS_PORT:-8083}
@@ -64,28 +63,27 @@ services:
       - MODULE_DEEZER_PORT=${MODULE_DEEZER_PORT:-8087}
       - MODULE_THREADS_PORT=${MODULE_THREADS_PORT:-8088}
       - MODULE_TWITTER_PORT=${MODULE_TWITTER_PORT:-8089}
-      - MODULE_TIKTOK_ENDPOINT=${MODULE_TIKTOK_ENDPOINT:-http://localhost:8081}
-      - MODULE_INSTAGRAM_ENDPOINT=${MODULE_INSTAGRAM_ENDPOINT:-http://localhost:8082}
-      - MODULE_SHORTS_ENDPOINT=${MODULE_SHORTS_ENDPOINT:-http://localhost:8083}
-      - MODULE_SOUNDCLOUD_ENDPOINT=${MODULE_SOUNDCLOUD_ENDPOINT:-http://localhost:8084}
-      - MODULE_YTMUSIC_ENDPOINT=${MODULE_YTMUSIC_ENDPOINT:-http://localhost:8085}
-      - MODULE_SPOTIFY_ENDPOINT=${MODULE_SPOTIFY_ENDPOINT:-http://localhost:8086}
-      - MODULE_DEEZER_ENDPOINT=${MODULE_DEEZER_ENDPOINT:-http://localhost:8087}
-      - MODULE_THREADS_ENDPOINT=${MODULE_THREADS_ENDPOINT:-http://localhost:8088}
-      - MODULE_TWITTER_ENDPOINT=${MODULE_TWITTER_ENDPOINT:-http://localhost:8089}
+      - MODULE_TIKTOK_ENDPOINT=${MODULE_TIKTOK_ENDPOINT:-http://tiktok:8081}
+      - MODULE_INSTAGRAM_ENDPOINT=${MODULE_INSTAGRAM_ENDPOINT:-http://instagram:8082}
+      - MODULE_SHORTS_ENDPOINT=${MODULE_SHORTS_ENDPOINT:-http://shorts:8083}
+      - MODULE_SOUNDCLOUD_ENDPOINT=${MODULE_SOUNDCLOUD_ENDPOINT:-http://soundcloud:8084}
+      - MODULE_YTMUSIC_ENDPOINT=${MODULE_YTMUSIC_ENDPOINT:-http://ytmusic:8085}
+      - MODULE_SPOTIFY_ENDPOINT=${MODULE_SPOTIFY_ENDPOINT:-http://spotify:8086}
+      - MODULE_DEEZER_ENDPOINT=${MODULE_DEEZER_ENDPOINT:-http://deezer:8087}
+      - MODULE_THREADS_ENDPOINT=${MODULE_THREADS_ENDPOINT:-http://threads:8088}
+      - MODULE_TWITTER_ENDPOINT=${MODULE_TWITTER_ENDPOINT:-http://twitter:8089}
 
   tiktok:
     build:
       context: .
       dockerfile: ./pinchana-tiktok/Dockerfile
     container_name: ${TIKTOK_CONTAINER_NAME:-pinchana-tiktok-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${TIKTOK_HOST_PORT:-8081}:8081"
     volumes:
       - scraper-cache:/app/cache
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
@@ -96,13 +94,12 @@ services:
       context: .
       dockerfile: ./pinchana-inst/Dockerfile
     container_name: ${INSTAGRAM_CONTAINER_NAME:-pinchana-inst-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${INSTAGRAM_HOST_PORT:-8082}:8082"
     volumes:
       - scraper-cache:/app/cache
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
@@ -113,14 +110,13 @@ services:
       context: .
       dockerfile: ./pinchana-shorts/Dockerfile
     container_name: ${SHORTS_CONTAINER_NAME:-pinchana-shorts-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${SHORTS_HOST_PORT:-8083}:8083"
     volumes:
       - scraper-cache:/app/cache
       - ${SHORTS_COOKIES_DIR:-./secrets/yt-cookies}:/run/pinchana-cookies:ro
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
@@ -133,13 +129,12 @@ services:
       context: .
       dockerfile: ./pinchana-soundcloud/Dockerfile
     container_name: ${SOUNDCLOUD_CONTAINER_NAME:-pinchana-soundcloud-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${SOUNDCLOUD_HOST_PORT:-8084}:8084"
     volumes:
       - scraper-cache:/app/cache
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
@@ -150,13 +145,12 @@ services:
       context: .
       dockerfile: ./pinchana-ytmusic/Dockerfile
     container_name: ${YTMUSIC_CONTAINER_NAME:-pinchana-ytmusic-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${YTMUSIC_HOST_PORT:-8085}:8085"
     volumes:
       - scraper-cache:/app/cache
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
@@ -167,13 +161,12 @@ services:
       context: .
       dockerfile: ./pinchana-spotify/Dockerfile
     container_name: ${SPOTIFY_CONTAINER_NAME:-pinchana-spotify-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${SPOTIFY_HOST_PORT:-8086}:8086"
     volumes:
       - scraper-cache:/app/cache
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
@@ -186,13 +179,12 @@ services:
       context: .
       dockerfile: ./pinchana-deezer/Dockerfile
     container_name: ${DEEZER_CONTAINER_NAME:-pinchana-deezer-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${DEEZER_HOST_PORT:-8087}:8087"
     volumes:
       - scraper-cache:/app/cache
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
@@ -203,13 +195,12 @@ services:
       context: .
       dockerfile: ./pinchana-threads/Dockerfile
     container_name: ${THREADS_CONTAINER_NAME:-pinchana-threads-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${THREADS_HOST_PORT:-8088}:8088"
     volumes:
       - scraper-cache:/app/cache
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
@@ -220,13 +211,12 @@ services:
       context: .
       dockerfile: ./pinchana-twitter/Dockerfile
     container_name: ${TWITTER_CONTAINER_NAME:-pinchana-twitter-dev}
-    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    ports:
+      - "${TWITTER_HOST_PORT:-8089}:8089"
     volumes:
       - scraper-cache:/app/cache
     environment:
+      - VPN_ENABLED=false
       - CACHE_PATH=/app/cache
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}

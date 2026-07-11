@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![Publish Docker images](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml)
 
-Pinchana is a Docker Compose based scraping gateway. A central FastAPI server accepts one `/scrape` request shape, detects the target platform, and forwards the job to a specialized scraper service. All services share Gluetun's network namespace, so outbound traffic goes through the VPN.
+Pinchana is a Docker Compose based scraping gateway. A central FastAPI server accepts one `/scrape` request shape, detects the target platform, and forwards the job to a specialized scraper service. The production stack routes outbound scraper traffic through Gluetun; the development stack can run without VPN credentials.
 
 ## Supported Services
 
@@ -45,7 +45,7 @@ Create configuration:
 cp .env.example .env
 ```
 
-Set at least:
+For the production stack, set at least:
 
 ```env
 WIREGUARD_PRIVATE_KEY=your_nordlynx_private_key
@@ -64,7 +64,7 @@ Run prebuilt GHCR images:
 docker compose up -d
 ```
 
-Build from source instead:
+Build from source without a VPN (each service binds its own development port):
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d --build
@@ -95,13 +95,13 @@ Admin endpoints:
 
 ## Configuration Notes
 
-All scraper and server containers use:
+In `docker-compose.yml`, all scraper and server containers use:
 
 ```yaml
 network_mode: container:gluetun
 ```
 
-Do not add `ports:` to scraper services. Publish new service ports on `gluetun` and mirror them in `.env.example`.
+Do not add `ports:` to production scraper services. Publish new production service ports on `gluetun` and mirror them in `.env.example`. `docker-compose.dev.yml` uses a normal bridge network, direct service ports, Compose DNS names, and `VPN_ENABLED=false`.
 
 Never run `docker restart gluetun`; it can clear VPN credentials and cause `AUTH_ERROR`. Recreate it instead:
 
