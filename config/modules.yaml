@@ -124,7 +124,7 @@ modules:
 
   threads:
     enabled: true
-    route_patterns: ["threads.net"]
+    route_patterns: ["threads.net", "threads.com"]
     source:
       type: local
       path: /modules/pinchana-threads
