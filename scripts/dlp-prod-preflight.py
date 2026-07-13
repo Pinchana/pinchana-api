@@ -83,6 +83,11 @@ def validate_compose(config: dict[str, object], phase: str) -> None:
     orchestrator_volumes = json.dumps(services["dlp-orchestrator"].get("volumes", []))
     if "docker.sock" in api_volumes or "docker.sock" not in orchestrator_volumes:
         fail("The Docker socket must be mounted only into the DLP orchestrator")
+    api_environment = services["dlp-api"].get("environment", {})
+    if not str(api_environment.get("DLP_DOH_URL", "")).startswith("https://"):
+        fail("The DLP API must use an HTTPS DNS-over-HTTPS resolver")
+    if api_environment.get("DLP_DOH_PROXY_URL") != "http://dlp-vpn:8888":
+        fail("The DLP API must resolve public targets through the dedicated DLP VPN")
     orchestrator = services["dlp-orchestrator"]
     if set(orchestrator.get("cap_drop", [])) != {"ALL"} or set(orchestrator.get("cap_add", [])) != {"CHOWN"}:
         fail("The DLP orchestrator must drop all capabilities and add back only CHOWN")
