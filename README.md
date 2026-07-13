@@ -97,6 +97,11 @@ Browser clients use the isolated web flow:
 The official web client accepts custom origins only with an origin-bound,
 unexpired certificate. See [the instance trust model](docs/INSTANCE_TRUST.md).
 
+Browser-encrypted private downloads use the optional asynchronous DLP profile,
+not the normal `/scrape` module router. Keep `DLP_ENABLED=false` until its
+internal services and immutable images pass the [production rollout
+preflight](docs/DLP_PRODUCTION_ROLLOUT.md).
+
 Set the widget's private key as `TURNSTILE_SECRET_KEY`; the API calls Cloudflare Siteverify directly and never exposes this key to the web application. Set `TURNSTILE_EXPECTED_HOSTNAME` to the production web hostname and keep `TURNSTILE_EXPECTED_ACTION=turnstile-spin-v1`. Use a random `TURNSTILE_SESSION_SECRET` of at least 32 characters. Sessions default to 12 hours and are capped at 24 hours.
 
 When one of Cloudflare's documented public test secrets is configured for local development, the API still requires `success=true` but skips hostname and action checks because dummy validation responses do not carry production widget metadata. Production secrets always enforce the configured hostname and action.

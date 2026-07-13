@@ -29,6 +29,33 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  validate-dlp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Test DLP protocol and worker
+        working-directory: pinchana-dlp
+        run: uv run --with-requirements requirements-test.txt pytest -q
+
+      - name: Test authenticated gateway
+        working-directory: pinchana-server
+        run: uv run --with pytest pytest -q
+
+      - name: Validate production Compose profiles
+        run: |
+          docker compose config --quiet
+          docker compose --profile dlp config --quiet
+
   detect:
     runs-on: ubuntu-latest
     outputs:
@@ -63,14 +90,14 @@ jobs:
 
           # Manual stable/versioned releases default to all services.
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && ( "${{ github.event.inputs.publish_stable }}" == "true" || -n "${{ github.event.inputs.release_version }}" ) ]]; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
             echo "Manual release build — building all services"
             exit 0
           fi
 
           # For tags, build everything
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
             echo "Tag push — building all services"
             exit 0
           fi
@@ -82,14 +109,14 @@ jobs:
 
           # If workflow or compose changed, build everything
           if echo "$CHANGED" | grep -qE '^\.github/workflows/docker-publish\.yml|^docker-compose\.yml$'; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
             echo "Workflow/compose changed — building all services"
             exit 0
           fi
 
           # If pinchana-core changed, build everything (all services depend on it)
           if echo "$CHANGED" | grep -qE '^pinchana-core/|^pinchana-core$'; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
             echo "pinchana-core changed — building all services"
             exit 0
           fi
@@ -97,10 +124,11 @@ jobs:
           # Build only services whose submodules changed
           matrix='{"include": ['
           first=1
-          for svc in server tiktok instagram shorts soundcloud ytmusic spotify deezer threads twitter; do
+          for svc in server tiktok instagram shorts soundcloud ytmusic spotify deezer threads twitter dlp-api dlp-orchestrator dlp-worker; do
             dir="pinchana-${svc}"
             # Service name 'instagram' maps to the pinchana-inst/ submodule
             [ "$svc" = "instagram" ] && dir="pinchana-inst"
+            [[ "$svc" == dlp-* ]] && dir="pinchana-dlp"
             # Match both dir/ (files inside) and dir itself (submodule pointer update)
             if echo "$CHANGED" | grep -qE "^${dir}/|^${dir}$"; then
               [[ $first -eq 0 ]] && matrix+=","
@@ -114,7 +142,7 @@ jobs:
           echo "Selective matrix: $matrix"
 
   build-and-push:
-    needs: detect
+    needs: [detect, validate-dlp]
     if: ${{ fromJson(needs.detect.outputs.matrix).include[0] != null }}
     runs-on: ubuntu-latest
     permissions:
@@ -146,6 +174,7 @@ jobs:
         id: map
         run: |
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "context=." >> $GITHUB_OUTPUT
           case "${{ matrix.service }}" in
             server)     echo "dockerfile=./pinchana-server/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/server" >> $GITHUB_OUTPUT ;;
             tiktok)     echo "dockerfile=./pinchana-tiktok/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/tiktok" >> $GITHUB_OUTPUT ;;
@@ -157,6 +186,9 @@ jobs:
             deezer)     echo "dockerfile=./pinchana-deezer/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/deezer" >> $GITHUB_OUTPUT ;;
             threads)    echo "dockerfile=./pinchana-threads/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/threads" >> $GITHUB_OUTPUT ;;
             twitter)    echo "dockerfile=./pinchana-twitter/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/twitter" >> $GITHUB_OUTPUT ;;
+            dlp-api)          echo "context=./pinchana-dlp/api" >> $GITHUB_OUTPUT; echo "dockerfile=./pinchana-dlp/api/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/dlp-api" >> $GITHUB_OUTPUT ;;
+            dlp-orchestrator) echo "context=./pinchana-dlp/orchestrator" >> $GITHUB_OUTPUT; echo "dockerfile=./pinchana-dlp/orchestrator/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/dlp-orchestrator" >> $GITHUB_OUTPUT ;;
+            dlp-worker)       echo "context=./pinchana-dlp/worker" >> $GITHUB_OUTPUT; echo "dockerfile=./pinchana-dlp/worker/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/dlp-worker" >> $GITHUB_OUTPUT ;;
           esac
 
       - name: Compute release tags
@@ -203,7 +235,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ steps.map.outputs.context }}
           file: ${{ steps.map.outputs.dockerfile }}
           push: true
           tags: |

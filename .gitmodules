@@ -31,3 +31,6 @@
 [submodule "pinchana-twitter"]
 	path = pinchana-twitter
 	url = https://github.com/Pinchana/pinchana-twitter.git
+[submodule "pinchana-dlp"]
+	path = pinchana-dlp
+	url = https://github.com/Pinchana/pinchana-dlp.git
