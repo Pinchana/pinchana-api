@@ -83,6 +83,9 @@ def validate_compose(config: dict[str, object], phase: str) -> None:
     orchestrator_volumes = json.dumps(services["dlp-orchestrator"].get("volumes", []))
     if "docker.sock" in api_volumes or "docker.sock" not in orchestrator_volumes:
         fail("The Docker socket must be mounted only into the DLP orchestrator")
+    orchestrator = services["dlp-orchestrator"]
+    if set(orchestrator.get("cap_drop", [])) != {"ALL"} or set(orchestrator.get("cap_add", [])) != {"CHOWN"}:
+        fail("The DLP orchestrator must drop all capabilities and add back only CHOWN")
     if "dlp-worker" in services.get("gluetun", {}).get("networks", {}):
         fail("Existing scraper VPN traffic must remain isolated from DLP workers")
 
