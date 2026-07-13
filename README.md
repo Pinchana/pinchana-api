@@ -81,10 +81,25 @@ curl http://localhost:8080/health
 ```bash
 curl -X POST http://localhost:8080/scrape \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: $PINCHANA_API_KEY" \
   -d '{"url": "https://www.instagram.com/p/SHORTCODE/"}'
 ```
 
-The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, and Instagram URLs.
+The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
+
+Browser clients use the isolated web flow:
+
+1. `GET /web/identity` publishes an optional project-issued instance certificate.
+2. `POST /web/verify` exchanges a one-use Turnstile token for a signed session.
+3. `GET /web/session` validates that bearer session.
+4. `POST /web/scrape` and `GET /web/media/...` accept the bearer session without exposing a machine API key.
+
+The official web client accepts custom origins only with an origin-bound,
+unexpired certificate. See [the instance trust model](docs/INSTANCE_TRUST.md).
+
+Set the widget's private key as `TURNSTILE_SECRET_KEY`; the API calls Cloudflare Siteverify directly and never exposes this key to the web application. Set `TURNSTILE_EXPECTED_HOSTNAME` to the production web hostname and keep `TURNSTILE_EXPECTED_ACTION=turnstile-spin-v1`. Use a random `TURNSTILE_SESSION_SECRET` of at least 32 characters. Sessions default to 12 hours and are capped at 24 hours.
+
+When one of Cloudflare's documented public test secrets is configured for local development, the API still requires `success=true` but skips hostname and action checks because dummy validation responses do not carry production widget metadata. Production secrets always enforce the configured hostname and action.
 
 Admin endpoints:
 
