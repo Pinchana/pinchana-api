@@ -6,12 +6,20 @@ The DLP stack is deployed in two phases. Infrastructure is brought up while the 
 
 Publish the `pinchana-dlp` and `pinchana-server` commits first, then commit and publish their pointers from `pinchana-api`. Publish the web application separately. Do not point the parent repository at submodule commits that are not reachable from their public remotes.
 
-Use the Docker publishing workflow to create one release tag for all three DLP images. Production must set explicit, matching tags or digests:
+Use the Docker publishing workflow to create all three DLP images. On the production host, pull the current images and atomically replace their three `.env` values with immutable repository digests:
+
+```bash
+python3 scripts/update-dlp-image-pins.py --env-file .env
+```
+
+The updater resolves the repository already configured for each service, pulls its `latest` tag, and changes only `DLP_API_IMAGE`, `DLP_ORCHESTRATOR_IMAGE`, and `DLP_WORKER_IMAGE`. It writes nothing until all three digests resolve successfully. Use `--dry-run` to resolve and print the pins without changing `.env`, or `--tag stable` to pin another published tag.
+
+The resulting production values are immutable:
 
 ```env
-DLP_API_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-api:RELEASE_TAG
-DLP_ORCHESTRATOR_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-orchestrator:RELEASE_TAG
-DLP_WORKER_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-worker:RELEASE_TAG
+DLP_API_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-api@sha256:...
+DLP_ORCHESTRATOR_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-orchestrator@sha256:...
+DLP_WORKER_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-worker@sha256:...
 DLP_VPN_IMAGE=qmcgaw/gluetun:v3.40.0
 DLP_DOH_URL=https://cloudflare-dns.com/dns-query
 ```
@@ -31,9 +39,7 @@ Downloads are temporary. Do not back up or synchronize this directory.
 ## 3. Pull and preflight
 
 ```bash
-docker compose --env-file .env --profile dlp pull dlp-redis dlp-vpn dlp-api dlp-orchestrator
-worker_image="$(docker compose --env-file .env --profile dlp config --format json | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"]["dlp-orchestrator"]["environment"]["WORKER_IMAGE"])')"
-docker pull "$worker_image"
+docker compose --env-file .env --profile dlp pull dlp-redis dlp-vpn
 python scripts/dlp-prod-preflight.py --env-file .env --phase infra
 ```
 
