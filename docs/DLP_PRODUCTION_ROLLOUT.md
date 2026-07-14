@@ -12,7 +12,7 @@ Use the Docker publishing workflow to create all three DLP images. On the produc
 python3 scripts/update-dlp-image-pins.py --env-file .env
 ```
 
-The updater resolves the repository already configured for each service, pulls its `latest` tag, and changes only `DLP_API_IMAGE`, `DLP_ORCHESTRATOR_IMAGE`, and `DLP_WORKER_IMAGE`. It writes nothing until all three digests resolve successfully. Use `--dry-run` to resolve and print the pins without changing `.env`, or `--tag stable` to pin another published tag.
+The updater resolves the repository already configured for each service, pulls its `latest` tag, and changes only `DLP_API_IMAGE`, `DLP_ORCHESTRATOR_IMAGE`, and `DLP_WORKER_IMAGE`. It writes nothing until all three digests resolve successfully. Use `--dry-run` to resolve and print the pins without changing `.env`.
 
 The resulting production values are immutable:
 
