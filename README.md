@@ -85,14 +85,30 @@ curl -X POST http://localhost:8080/scrape \
   -d '{"url": "https://www.instagram.com/p/SHORTCODE/"}'
 ```
 
-The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
+The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/scrape`, `/v1/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
+
+New integrations should use the versioned response contract:
+
+```bash
+curl -X POST http://localhost:8080/v1/scrape \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $PINCHANA_API_KEY" \
+  -d '{"url": "https://www.instagram.com/p/SHORTCODE/"}'
+```
+
+`/v1/scrape` returns `{data, meta}`. Source, content, author, engagement, safety,
+music, and link metadata are grouped, while all downloadable images, videos,
+audio, covers, and slideshow soundtracks live in one ordered `data.media` array.
+Each image or video includes `dimensions: {width, height}` when the cached file
+can be inspected. V1 errors use a stable `{error: {code, message, details}}`
+envelope. The flat `/scrape` response remains available for existing clients.
 
 Browser clients use the isolated web flow:
 
 1. `GET /web/identity` publishes an optional project-issued instance certificate.
 2. `POST /web/verify` exchanges a one-use Turnstile token for a signed session.
 3. `GET /web/session` validates that bearer session.
-4. `POST /web/scrape` and `GET /web/media/...` accept the bearer session without exposing a machine API key.
+4. `POST /v1/web/scrape` returns the normalized v1 contract and `GET /web/media/...` serves its protected assets without exposing a machine API key. Legacy `/web/scrape` remains available for older clients.
 
 The official web client accepts custom origins only with an origin-bound,
 unexpired certificate. See [the instance trust model](docs/INSTANCE_TRUST.md).
