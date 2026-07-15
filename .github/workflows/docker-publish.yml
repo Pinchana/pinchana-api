@@ -191,6 +191,12 @@ jobs:
             dlp-worker)       echo "context=./pinchana-dlp/worker" >> $GITHUB_OUTPUT; echo "dockerfile=./pinchana-dlp/worker/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/dlp-worker" >> $GITHUB_OUTPUT ;;
           esac
 
+      - name: Compute public build manifest
+        id: build-info
+        run: |
+          echo "commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "commits=$(python scripts/build_manifest.py)" >> "$GITHUB_OUTPUT"
+
       - name: Compute release tags
         id: release-tags
         run: |
@@ -242,5 +248,8 @@ jobs:
             ${{ steps.meta.outputs.tags }}
             ${{ steps.release-tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PINCHANA_BUILD_COMMIT=${{ steps.build-info.outputs.commit }}
+            PINCHANA_BUILD_COMMITS=${{ steps.build-info.outputs.commits }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.map.outputs.image }}:build-cache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.map.outputs.image }}:build-cache,mode=max,ignore-error=true
