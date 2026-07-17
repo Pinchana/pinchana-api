@@ -5,9 +5,9 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![Publish Docker images](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml)
 
-Pinchana is a Docker Compose based scraping gateway. A central FastAPI server accepts one `/scrape` request shape, detects the target platform, and forwards the job to a specialized scraper service. The production stack routes outbound scraper traffic through Gluetun; the development stack can run without VPN credentials.
+Pinchana API is a Docker Compose-based media extraction gateway. A central FastAPI server accepts the versioned `/v1/scrape` request, selects a platform module, and returns a normalized response. The production stack routes outbound scraper traffic through Gluetun; the development stack can run without VPN credentials. The unversioned `/scrape` route remains available for existing integrations.
 
-## Supported Services
+## Supported services
 
 | Service | Port | Routes |
 | --- | ---: | --- |
@@ -19,23 +19,23 @@ Pinchana is a Docker Compose based scraping gateway. A central FastAPI server ac
 | ytmusic | 8085 | `music.youtube.com` |
 | spotify | 8086 | `open.spotify.com` |
 | deezer | 8087 | `deezer.com`, Deezer link domains |
-| threads | 8088 | `threads.net` |
+| threads | 8088 | `threads.net`, `threads.com` |
 | twitter | 8089 | `x.com`, `twitter.com`, `vxtwitter.com`, `fxtwitter.com` |
 
 Gluetun's control API is exposed on port `8000`.
 
-## Repository Layout
+## Repository layout
 
 This root repository only orchestrates submodules and Docker Compose. Each `pinchana-*` directory is an independent Python package with `pyproject.toml`, `uv.lock`, `Dockerfile`, and `src/pinchana_<name>/`.
 
 `pinchana-core` contains shared models, storage, music helpers, Docker orchestration helpers, and Gluetun control logic. Every service depends on it through a local uv path dependency.
 
-## Quick Start
+## Quick start
 
 Clone with submodules:
 
 ```bash
-git clone --recursive https://github.com/Pinchana/pinchana-api.git
+git clone --recurse-submodules https://github.com/Pinchana/pinchana-api.git
 cd pinchana-api
 ```
 
@@ -43,58 +43,54 @@ Create configuration:
 
 ```bash
 cp .env.example .env
+chmod 600 .env
 ```
 
 For the production stack, set at least:
 
 ```env
-WIREGUARD_PRIVATE_KEY=your_nordlynx_private_key
+WIREGUARD_PRIVATE_KEY=REPLACE_WITH_PROVIDER_WIREGUARD_PRIVATE_KEY
+PINCHANA_API_KEYS={"automation":"REPLACE_WITH_LONG_RANDOM_MACHINE_KEY"}
 ```
 
 For Spotify scraping, also set:
 
 ```env
-SPOTIFY_CLIENT_ID=...
-SPOTIFY_CLIENT_SECRET=...
+SPOTIFY_CLIENT_ID=REPLACE_WITH_CLIENT_ID
+SPOTIFY_CLIENT_SECRET=REPLACE_WITH_CLIENT_SECRET
 ```
 
 Run prebuilt GHCR images:
 
 ```bash
-docker compose up -d
+docker compose --env-file .env config --quiet
+docker compose --env-file .env pull
+docker compose --env-file .env up --detach
 ```
 
 Build from source without a VPN (each service binds its own development port):
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --build
+docker compose --env-file .env -f docker-compose.dev.yml up --detach --build
 ```
 
 Check health:
 
 ```bash
-curl http://localhost:8080/health
+curl --fail-with-body --silent --show-error http://localhost:8080/health
 ```
 
 ## API Usage
 
 ```bash
-curl -X POST http://localhost:8080/scrape \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $PINCHANA_API_KEY" \
-  -d '{"url": "https://www.instagram.com/p/SHORTCODE/"}'
+curl --fail-with-body --silent --show-error \
+  --request POST http://localhost:8080/v1/scrape \
+  --header 'Content-Type: application/json' \
+  --header 'X-API-Key: REPLACE_WITH_MACHINE_KEY' \
+  --data '{"url":"https://www.instagram.com/p/REPLACE_WITH_PUBLIC_SHORTCODE/"}'
 ```
 
-The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/scrape`, `/v1/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
-
-New integrations should use the versioned response contract:
-
-```bash
-curl -X POST http://localhost:8080/v1/scrape \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $PINCHANA_API_KEY" \
-  -d '{"url": "https://www.instagram.com/p/SHORTCODE/"}'
-```
+The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/v1/scrape`, legacy `/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
 
 `/v1/scrape` returns `{data, meta}`. Source, content, author, engagement, safety,
 music, and link metadata are grouped, while all downloadable images, videos,
@@ -142,7 +138,7 @@ Do not add `ports:` to production scraper services. Publish new production servi
 Never run `docker restart gluetun`; it can clear VPN credentials and cause `AUTH_ERROR`. Recreate it instead:
 
 ```bash
-docker compose up -d --force-recreate gluetun
+docker compose --env-file .env up --detach --force-recreate gluetun
 ```
 
 Shorts can use YouTube cookies from `SHORTS_COOKIES_DIR` mounted read-only to `/run/pinchana-cookies`. `SHORTS_MAX_MB_PER_MINUTE` controls optional MP4 re-encoding for oversized output.
@@ -153,7 +149,7 @@ Work inside submodules:
 
 ```bash
 cd pinchana-inst
-uv sync
+uv sync --frozen
 uv run uvicorn pinchana_inst.main:app --reload
 uv run python -c "import pinchana_inst; print('ok')"
 ```
@@ -162,8 +158,8 @@ Run Instagram tests:
 
 ```bash
 cd pinchana-inst
-uv run pytest
-PINCHANA_INST_LIVE=1 uv run pytest
+uv run pytest -q
+PINCHANA_INST_LIVE=1 uv run pytest -q
 ```
 
 Docker builds must use the repo root as build context:

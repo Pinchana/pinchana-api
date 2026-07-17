@@ -9,6 +9,7 @@ Publish the `pinchana-dlp` and `pinchana-server` commits first, then commit and 
 Use the Docker publishing workflow to create all three DLP images. On the production host, pull the current images and atomically replace their three `.env` values with immutable repository digests:
 
 ```bash
+python3 scripts/update-dlp-image-pins.py --env-file .env --dry-run
 python3 scripts/update-dlp-image-pins.py --env-file .env
 ```
 
@@ -48,7 +49,8 @@ The preflight rejects placeholder or reused secrets, `latest` image tags, unsafe
 ## 4. Start infrastructure with capability disabled
 
 ```bash
-docker compose --env-file .env --profile dlp up -d dlp-redis dlp-vpn dlp-api dlp-orchestrator
+docker compose --env-file .env --profile dlp up --detach \
+  dlp-redis dlp-vpn dlp-api dlp-orchestrator
 docker compose --env-file .env --profile dlp ps
 docker compose --env-file .env --profile dlp logs --tail=100 dlp-api dlp-orchestrator dlp-vpn
 ```
@@ -68,7 +70,7 @@ Use a non-public canary instance with the same images and networking for one ano
 After the canary succeeds, change only `DLP_ENABLED=true`, recreate the gateway, and run the enable-phase preflight:
 
 ```bash
-docker compose --env-file .env up -d --no-deps --force-recreate server
+docker compose --env-file .env up --detach --no-deps --force-recreate server
 python scripts/dlp-prod-preflight.py --env-file .env --phase enable
 ```
 
@@ -81,7 +83,7 @@ Monitor DLP allocation latency, active-job count, worker duration, output bytes,
 Set `DLP_ENABLED=false` and recreate only `server`. This immediately removes the advertised capability without interrupting existing scraper modules:
 
 ```bash
-docker compose --env-file .env up -d --no-deps --force-recreate server
+docker compose --env-file .env up --detach --no-deps --force-recreate server
 ```
 
 Allow active jobs to finish or expire. Then stop the profile if necessary:

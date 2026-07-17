@@ -67,8 +67,9 @@ Recreate the server so it receives the changed environment, then check the
 public identity endpoint through the final HTTPS origin:
 
 ```sh
-docker compose up -d --force-recreate server
-curl --fail --silent https://api.example.com/web/identity
+docker compose --env-file .env up --detach --force-recreate server
+curl --fail-with-body --silent --show-error \
+  https://api.example.com/web/identity
 ```
 
 The response must be the same `payload` and `signature` envelope. A `503`
