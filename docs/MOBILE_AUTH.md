@@ -17,6 +17,48 @@ Attested providers are not advertised unless both `MOBILE_ATTESTATION_URL` and
 `MOBILE_ATTESTATION_TOKEN` are configured. This prevents a client from
 generating a platform attestation that the gateway cannot validate.
 
+## Production deployment
+
+Generate separate random values for the mobile session signer and the internal
+verifier credential:
+
+```sh
+openssl rand -base64 48
+openssl rand -base64 48
+```
+
+Set these values in the production `.env`:
+
+```dotenv
+MOBILE_AUTH_MODE=attested
+MOBILE_SESSION_SECRET=<first generated value>
+MOBILE_ATTESTATION_URL=http://mobile-attestation:8080/verify
+MOBILE_ATTESTATION_TOKEN=<second generated value>
+MOBILE_ACCESS_TOKEN_MAX_AGE=900
+MOBILE_REFRESH_TOKEN_MAX_AGE=2592000
+MOBILE_CHALLENGE_TTL=120
+MOBILE_CHALLENGE_RATE_WINDOW=600
+MOBILE_CHALLENGE_RATE_LIMIT=10
+MOBILE_TRUST_PROXY_HEADERS=false
+MOBILE_GUEST_SCOPES=mobile:scrape,mobile:media,mobile:capabilities
+```
+
+Do not reuse `TURNSTILE_SESSION_SECRET`, a DLP secret, or a value from
+`PINCHANA_API_KEYS`. The mobile app must never contain any of these secrets.
+
+For an existing Compose deployment, pull and recreate only the gateway:
+
+```sh
+docker compose pull server
+docker compose up -d --no-deps --force-recreate server
+docker compose logs --tail=100 server
+```
+
+Use `MOBILE_AUTH_MODE=guest` only for local testing while the external
+attestation verifier is unavailable. Official mobile builds should use
+`attested`; the production default remains `disabled` so incomplete
+deployments fail closed.
+
 ## Grant lifecycle
 
 1. `POST /v1/mobile/challenges` with the installation ID, platform, and native
