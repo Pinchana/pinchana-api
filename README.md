@@ -110,7 +110,7 @@ Native clients never receive a machine API key. They use the mobile installation
 grant flow:
 
 1. `POST /v1/mobile/challenges` creates a short-lived, single-use challenge.
-2. `POST /v1/mobile/attest` consumes the challenge and returns a 15-minute
+2. `POST /v1/mobile/grants` consumes the challenge and returns a 15-minute
    scoped access token plus a rotating refresh token.
 3. `POST /v1/mobile/session/refresh` rotates the refresh token; reuse revokes
    the complete token family.
@@ -118,14 +118,15 @@ grant flow:
    `aud=pinchana-mobile` access tokens with their required scope.
 
 Grant and refresh state is stored in `MOBILE_SESSION_DB_PATH`, which defaults to
-the server's persistent cache volume. `MOBILE_AUTH_MODE=attested` delegates App
-Attest and Play Integrity evidence validation to `MOBILE_ATTESTATION_URL`.
-`guest` mode is explicitly lower-trust and intended for development or
-self-hosted instances; production Compose defaults mobile authentication to
-disabled until a policy is configured. The former static-key
-`/v1/mobile/verify` exchange is retired. See
-[mobile installation authentication](docs/MOBILE_AUTH.md) for the verifier
-contract and operational requirements.
+the server's persistent cache volume. The current production Compose default is
+`MOBILE_AUTH_MODE=guest`: this issues revocable, scoped installation sessions
+without requiring App Store or Play Store attestation and without placing a
+machine key in the app. Optional `attested` mode can later delegate App Attest
+and Play Integrity validation to `MOBILE_ATTESTATION_URL`. The former static-key
+`/v1/mobile/verify` exchange is retired; `/v1/mobile/attest` remains as a
+deprecated alias for `/v1/mobile/grants`. See
+[mobile installation authentication](docs/MOBILE_AUTH.md) for operational
+requirements.
 
 The official web client accepts custom origins only with an origin-bound,
 unexpired certificate. See [the instance trust model](docs/INSTANCE_TRUST.md).

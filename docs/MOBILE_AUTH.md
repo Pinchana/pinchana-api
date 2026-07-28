@@ -1,14 +1,14 @@
 # Mobile installation authentication
 
 Pinchana Mobile does not contain a machine API key. The gateway grants sessions
-to an installation after a single-use challenge and, when required, platform
-attestation.
+to an installation after a single-use challenge. Platform attestation is
+optional and is not required for the current distribution model.
 
 ## Runtime modes
 
-- `disabled`: fail closed. This is the production Compose default.
-- `guest`: issue explicitly lower-trust grants. Use only for development or a
-  self-hosted instance that accepts anonymous clients.
+- `disabled`: fail closed.
+- `guest`: issue scoped, non-attested installation grants. This is the current
+  production Compose default for sideloaded builds.
 - `attested`: require Apple App Attest or Google Play Integrity.
 - `hybrid`: prefer platform attestation but allow a lower-trust guest grant on
   unsupported devices.
@@ -19,21 +19,19 @@ generating a platform attestation that the gateway cannot validate.
 
 ## Production deployment
 
-Generate separate random values for the mobile session signer and the internal
-verifier credential:
+Generate a random value for the mobile session signer:
 
 ```sh
-openssl rand -base64 48
 openssl rand -base64 48
 ```
 
 Set these values in the production `.env`:
 
 ```dotenv
-MOBILE_AUTH_MODE=attested
-MOBILE_SESSION_SECRET=<first generated value>
-MOBILE_ATTESTATION_URL=http://mobile-attestation:8080/verify
-MOBILE_ATTESTATION_TOKEN=<second generated value>
+MOBILE_AUTH_MODE=guest
+MOBILE_SESSION_SECRET=<generated value>
+MOBILE_ATTESTATION_URL=
+MOBILE_ATTESTATION_TOKEN=
 MOBILE_ACCESS_TOKEN_MAX_AGE=900
 MOBILE_REFRESH_TOKEN_MAX_AGE=2592000
 MOBILE_CHALLENGE_TTL=120
@@ -44,7 +42,7 @@ MOBILE_GUEST_SCOPES=mobile:scrape,mobile:media,mobile:capabilities
 ```
 
 Do not reuse `TURNSTILE_SESSION_SECRET`, a DLP secret, or a value from
-`PINCHANA_API_KEYS`. The mobile app must never contain any of these secrets.
+`PINCHANA_API_KEYS`. The mobile app must never contain the session secret.
 
 For an existing Compose deployment, pull and recreate only the gateway:
 
@@ -54,22 +52,23 @@ docker compose up -d --no-deps --force-recreate server
 docker compose logs --tail=100 server
 ```
 
-Use `MOBILE_AUTH_MODE=guest` only for local testing while the external
-attestation verifier is unavailable. Official mobile builds should use
-`attested`; the production default remains `disabled` so incomplete
-deployments fail closed.
+This mode proves control of the issued installation session, not that the app
+came from an official store. Keep its scopes narrow, retain the challenge rate
+limit, and revoke abusive installations through the admin endpoint. Optional
+store attestation can be enabled later without changing the session contract.
 
 ## Grant lifecycle
 
 1. `POST /v1/mobile/challenges` with the installation ID, platform, and native
    application ID.
-2. The client creates evidence over the canonical client data:
+2. When an attested provider is enabled, the client creates evidence over the
+   canonical client data:
 
    ```text
    {challenge}.{app_id}.{installation_id}
    ```
 
-3. `POST /v1/mobile/attest` consumes the challenge and returns:
+3. `POST /v1/mobile/grants` consumes the challenge and returns:
    - a short-lived, scoped mobile access token;
    - an opaque rotating refresh token.
 4. `POST /v1/mobile/session/refresh` rotates the refresh token. Reuse of any
@@ -83,11 +82,12 @@ short access-token lifetime.
 
 Access tokens use `aud=pinchana-mobile`, `typ=mobile_access`, a stable
 installation `sub`, and route-specific scopes. Web sessions and mobile sessions
-are not interchangeable.
+are not interchangeable. `/v1/mobile/attest` remains a deprecated alias for
+older clients.
 
-## Attestation verifier contract
+## Optional attestation verifier contract
 
-The gateway sends the complete `/v1/mobile/attest` request to
+For attested providers, the gateway sends the complete mobile grant request to
 `MOBILE_ATTESTATION_URL` with:
 
 ```http
