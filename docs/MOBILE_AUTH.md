@@ -1,12 +1,20 @@
 # Mobile installation authentication
 
-Pinchana Mobile does not contain a machine API key. The gateway grants sessions
-to an installation after a single-use challenge. Platform attestation is
-optional and is not required for the current distribution model.
+Pinchana Mobile does not contain a machine API key. Authentication is optional
+for mobile scrape, cached media, and capability requests. When a bearer token
+is supplied, the gateway validates it and its route scope. Private DLP jobs
+always require a session because the signed installation ID isolates each
+client's jobs.
+
+The gateway can grant sessions to an installation after a single-use challenge.
+Platform attestation is optional and is not required for the current
+distribution model. Set `MOBILE_AUTH_REQUIRED=true` only when every public
+mobile request must carry a valid installation session.
 
 ## Runtime modes
 
-- `disabled`: fail closed.
+- `disabled`: do not issue installation sessions. Public mobile routes remain
+  anonymous unless `MOBILE_AUTH_REQUIRED=true`, in which case they fail closed.
 - `guest`: issue scoped, non-attested installation grants. This is the current
   production Compose default for sideloaded builds.
 - `attested`: require Apple App Attest or Google Play Integrity.
@@ -19,7 +27,8 @@ generating a platform attestation that the gateway cannot validate.
 
 ## Production deployment
 
-Generate a random value for the mobile session signer:
+When installation grants are enabled, generate a random value for the mobile
+session signer:
 
 ```sh
 openssl rand -base64 48
@@ -29,6 +38,7 @@ Set these values in the production `.env`:
 
 ```dotenv
 MOBILE_AUTH_MODE=guest
+MOBILE_AUTH_REQUIRED=false
 MOBILE_SESSION_SECRET=<generated value>
 MOBILE_ATTESTATION_URL=
 MOBILE_ATTESTATION_TOKEN=
@@ -52,10 +62,18 @@ docker compose up -d --no-deps --force-recreate server
 docker compose logs --tail=100 server
 ```
 
-This mode proves control of the issued installation session, not that the app
-came from an official store. Keep its scopes narrow, retain the challenge rate
-limit, and revoke abusive installations through the admin endpoint. Optional
-store attestation can be enabled later without changing the session contract.
+This mode proves control of an issued installation session, not that the app
+came from an official store. Anonymous clients receive only the fixed scrape,
+media, and capability permissions; `MOBILE_GUEST_SCOPES` applies to issued guest
+tokens and does not make DLP anonymous. Keep token scopes narrow, retain the
+challenge rate limit, and revoke abusive installations through the admin
+endpoint. Optional store attestation can be enabled later without changing the
+session contract.
+
+When `MOBILE_AUTH_REQUIRED=false`, a missing or placeholder
+`MOBILE_SESSION_SECRET` disables the installation grant endpoints without
+preventing the gateway from starting; anonymous mobile routes remain available.
+Strict mode keeps the startup check fail-closed.
 
 ## Grant lifecycle
 

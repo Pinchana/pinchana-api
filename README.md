@@ -106,16 +106,22 @@ Browser clients use the isolated web flow:
 3. `GET /web/session` validates that bearer session.
 4. `POST /v1/web/scrape` returns the normalized v1 contract and `GET /web/media/...` serves its protected assets without exposing a machine API key. Legacy `/web/scrape` remains available for older clients.
 
-Native clients never receive a machine API key. They use the mobile installation
-grant flow:
+Native clients never receive a machine API key. Mobile authentication is
+optional by default: scrape, cached media, and capability routes accept
+anonymous requests and validate scoped installation tokens when supplied.
+Set `MOBILE_AUTH_REQUIRED=true` to require those tokens. Private DLP routes
+always require an authenticated installation because the installation identity
+is their job-ownership boundary.
+
+When enabled, the mobile installation grant flow is:
 
 1. `POST /v1/mobile/challenges` creates a short-lived, single-use challenge.
 2. `POST /v1/mobile/grants` consumes the challenge and returns a 15-minute
    scoped access token plus a rotating refresh token.
 3. `POST /v1/mobile/session/refresh` rotates the refresh token; reuse revokes
    the complete token family.
-4. Mobile scrape, media, capability, and DLP routes accept only
-   `aud=pinchana-mobile` access tokens with their required scope.
+4. Mobile scrape, media, and capability routes accept the token optionally;
+   DLP routes require it and enforce their required scope.
 
 Grant and refresh state is stored in `MOBILE_SESSION_DB_PATH`, which defaults to
 the server's persistent cache volume. The current production Compose default is
