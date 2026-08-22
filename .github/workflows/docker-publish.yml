@@ -2,11 +2,13 @@ name: Publish Docker images
 
 on:
   push:
-    branches: [main, stable]
-    tags: ['v*.*.*']
+    branches: [main]
+    tags: ['v*']
     paths:
       - '.github/workflows/docker-publish.yml'
+      - 'VERSION'
       - 'docker-compose.yml'
+      - 'scripts/version.py'
       - 'pinchana-*/**'
       - 'pinchana-*'
   workflow_dispatch:
@@ -15,15 +17,6 @@ on:
         description: 'Comma-separated list of services to build (empty = auto-detect)'
         required: false
         default: ''
-      release_version:
-        description: 'Optional Docker tag to publish, e.g. 0.2.beta'
-        required: false
-        default: ''
-      publish_stable:
-        description: 'Also publish the stable Docker tag'
-        required: false
-        type: boolean
-        default: false
 
 env:
   REGISTRY: ghcr.io
@@ -42,6 +35,16 @@ jobs:
         with:
           python-version: "3.13"
           enable-cache: true
+
+      - name: Validate product version
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          if [[ -n "$RELEASE_TAG" ]]; then
+            python scripts/version.py check --tag "$RELEASE_TAG"
+          else
+            python scripts/version.py check
+          fi
 
       - name: Test DLP protocol and worker
         working-directory: pinchana-dlp
@@ -88,13 +91,6 @@ jobs:
             exit 0
           fi
 
-          # Manual stable/versioned releases default to all services.
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ( "${{ github.event.inputs.publish_stable }}" == "true" || -n "${{ github.event.inputs.release_version }}" ) ]]; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
-            echo "Manual release build — building all services"
-            exit 0
-          fi
-
           # For tags, build everything
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
@@ -107,10 +103,10 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED"
 
-          # If workflow or compose changed, build everything
-          if echo "$CHANGED" | grep -qE '^\.github/workflows/docker-publish\.yml|^docker-compose\.yml$'; then
+          # If release policy, workflow, or compose changed, build everything
+          if echo "$CHANGED" | grep -qE '^VERSION$|^scripts/version\.py$|^\.github/workflows/docker-publish\.yml|^docker-compose\.yml$'; then
             echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
-            echo "Workflow/compose changed — building all services"
+            echo "Release policy/workflow/compose changed — building all services"
             exit 0
           fi
 
@@ -197,34 +193,26 @@ jobs:
           echo "commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "commits=$(python scripts/build_manifest.py)" >> "$GITHUB_OUTPUT"
 
-      - name: Compute release tags
-        id: release-tags
+      - name: Compute image tags and build version
+        id: image-tags
         run: |
           image="${{ env.REGISTRY }}/${{ steps.map.outputs.image }}"
-          tags=""
-
-          add_tag() {
-            local tag="$1"
-            if [[ -n "$tag" ]]; then
-              tags+="${image}:${tag}"$'\n'
-            fi
-          }
-
-          if [[ "${{ github.ref }}" == "refs/heads/stable" || "${GITHUB_REF_TYPE}" == "tag" || "${{ github.event.inputs.publish_stable }}" == "true" ]]; then
-            add_tag "stable"
-          fi
-
-          if [[ -n "${{ github.event.inputs.release_version }}" ]]; then
-            add_tag "${{ github.event.inputs.release_version }}"
-          fi
-
+          product_version="$(python scripts/version.py show)"
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            add_tag "${GITHUB_REF_NAME#v}"
+            build_version="$product_version"
+            tag_suffixes="$(python scripts/version.py docker-tags)"
+          else
+            build_version="${product_version}+dev.${GITHUB_SHA:0:12}"
+            tag_suffixes="latest"
           fi
 
           {
+            echo "version=$build_version"
+            echo "primary=$(printf '%s\n' "$tag_suffixes" | head -n 1)"
             echo "tags<<EOF"
-            printf "%s" "$tags"
+            while IFS= read -r suffix; do
+              [[ -n "$suffix" ]] && echo "${image}:${suffix}"
+            done <<< "$tag_suffixes"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -234,9 +222,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ steps.map.outputs.image }}
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.image-tags.outputs.primary }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.image-tags.outputs.version }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -244,11 +232,10 @@ jobs:
           context: ${{ steps.map.outputs.context }}
           file: ${{ steps.map.outputs.dockerfile }}
           push: true
-          tags: |
-            ${{ steps.meta.outputs.tags }}
-            ${{ steps.release-tags.outputs.tags }}
+          tags: ${{ steps.image-tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            PINCHANA_BUILD_VERSION=${{ steps.image-tags.outputs.version }}
             PINCHANA_BUILD_COMMIT=${{ steps.build-info.outputs.commit }}
             PINCHANA_BUILD_COMMITS=${{ steps.build-info.outputs.commits }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.map.outputs.image }}:build-cache

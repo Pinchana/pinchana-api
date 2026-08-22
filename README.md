@@ -204,14 +204,39 @@ Images are published to:
 ghcr.io/pinchana/pinchana-api/<service>:<tag>
 ```
 
-Current tag policy:
+`VERSION` is the single source of truth for the rolling product release. It uses
+strict CalVer in `YY.MM.ITERATION` form. Releases within a month increment the
+last number (`26.08.1`, `26.08.2`); the first release of a new month resets it to
+`1`. The version tool calculates that transition, converts the result to PEP 440,
+and keeps every Python submodule manifest and lockfile synchronized:
 
-- Push to `main`: publishes `latest`.
-- Push to `stable`: publishes `stable`.
-- Push tag such as `v0.2.beta`: publishes `0.2.beta` and `stable`.
-- Manual workflow dispatch supports explicit `services`, `release_version`, and `publish_stable`.
+```bash
+python scripts/version.py check
+python scripts/version.py next
+python scripts/version.py bump
+```
 
-Python package versions use PEP 440. The `0.2.beta` Docker release is represented in submodule `pyproject.toml` files as `0.2b0`.
+Because the Python projects are separate Git submodules, commit and push their
+generated `pyproject.toml` and `uv.lock` changes first. Then commit their updated
+pointers together with `VERSION` in this repository. After the main build is
+green, create an annotated tag matching `VERSION` exactly:
+
+```bash
+git tag -a v26.08.1 -m "Release 26.08.1"
+git push origin v26.08.1
+```
+
+`python scripts/version.py set YY.MM.N` remains available for an explicit
+correction. CI rejects mismatched or nonstandard release tags. Image tag policy:
+
+- Push to `main`: publishes the snapshot channel `latest`; build metadata reports
+  `<VERSION>+dev.<commit>`.
+- Release tag such as `v26.08.1`: publishes immutable `26.08.1`, rolling monthly
+  `26.08`, and rolling release channel `stable`.
+- Manual workflow dispatch can select services but cannot mint release tags.
+
+The legacy `stable` branch is not a release input. This prevents manual builds
+and branch drift from overwriting the rolling release channel.
 
 ## Adding a Module
 

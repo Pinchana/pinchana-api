@@ -45,9 +45,9 @@ For other modules, verify by importing the package or running the service locall
 
 ## CI, Releases & Docker Tags
 
-`.github/workflows/docker-publish.yml` builds GHCR images at `ghcr.io/pinchana/pinchana-api/<service>`. Pushes to `main` publish `latest`; pushes to `stable` publish `stable`; release tags like `v0.2.beta` publish both `0.2.beta` and `stable`. Manual dispatch supports `services`, `release_version`, and `publish_stable`.
+`.github/workflows/docker-publish.yml` builds GHCR images at `ghcr.io/pinchana/pinchana-api/<service>`. `VERSION` is the rolling product CalVer source of truth in `YY.MM.ITERATION` form. Run `python scripts/version.py check` to validate it and `python scripts/version.py bump` to advance the monthly counter and synchronize Python package metadata and lockfiles. Commit and push submodule version changes before the parent pointers.
 
-Python package versions use PEP 440, so the `0.2.beta` Docker release is represented in submodule `pyproject.toml` files as `0.2b0`.
+Pushes to `main` publish `latest`. An exact matching tag such as `v26.08.1` publishes immutable `26.08.1`, monthly `26.08`, and `stable`. CI rejects mismatched tags, and neither the legacy `stable` branch nor manual dispatch can publish a release channel.
 
 ## Networking & Configuration
 
