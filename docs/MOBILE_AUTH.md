@@ -57,7 +57,7 @@ Do not reuse `TURNSTILE_SESSION_SECRET`, a DLP secret, or a value from
 For an existing Compose deployment, pull and recreate only the gateway:
 
 ```sh
-docker compose pull server
+python scripts/update_rolling.py --env-file .env
 docker compose up -d --no-deps --force-recreate server
 docker compose logs --tail=100 server
 ```

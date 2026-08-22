@@ -6,14 +6,14 @@ The DLP stack is deployed in two phases. Infrastructure is brought up while the 
 
 Publish the `pinchana-dlp` and `pinchana-server` commits first, then commit and publish their pointers from `pinchana-api`. Publish the web application separately. Do not point the parent repository at submodule commits that are not reachable from their public remotes.
 
-Use the Docker publishing workflow to create all three DLP images. On the production host, pull the current images and atomically replace their three `.env` values with immutable repository digests:
+Use the Docker publishing workflow to create all three DLP images. On the production host, update the APIs and DLP images as one coherent release and atomically replace their `.env` values with immutable repository digests:
 
 ```bash
-python3 scripts/update-dlp-image-pins.py --env-file .env --dry-run
-python3 scripts/update-dlp-image-pins.py --env-file .env
+python3 scripts/update_rolling.py --env-file .env --dlp --dry-run
+python3 scripts/update_rolling.py --env-file .env --dlp
 ```
 
-The updater resolves the repository already configured for each service, pulls its `latest` tag, and changes only `DLP_API_IMAGE`, `DLP_ORCHESTRATOR_IMAGE`, and `DLP_WORKER_IMAGE`. It writes nothing until all three digests resolve successfully. Use `--dry-run` to resolve and print the pins without changing `.env`.
+The updater resolves the repository already configured for each service, discovers the newest released CalVer through `stable`, verifies that every selected API and DLP image reports the same release, pulls each exact version tag, and pins its digest. It writes nothing until all selected digests resolve successfully. `--dlp` is required to touch `DLP_API_IMAGE`, `DLP_ORCHESTRATOR_IMAGE`, or `DLP_WORKER_IMAGE`; the updater leaves `DLP_VPN_IMAGE` unchanged.
 
 The resulting production values are immutable:
 

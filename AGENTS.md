@@ -49,6 +49,8 @@ For other modules, verify by importing the package or running the service locall
 
 Pushes to `main` publish `latest`. An exact matching tag such as `v26.08.1` publishes immutable `26.08.1`, monthly `26.08`, and `stable`. CI rejects mismatched tags, and neither the legacy `stable` branch nor manual dispatch can publish a release channel.
 
+Production hosts update through `python scripts/update_rolling.py --env-file .env`. It atomically pins the newest coherent API release by digest. DLP images are excluded unless `--dlp` is supplied; do not update production images through ad-hoc `docker compose pull` commands.
+
 ## Networking & Configuration
 
 Runtime services use `network_mode: container:gluetun`; do not add `ports:` to scraper services. Add ports only to `gluetun` and `.env.example`. Never run `docker restart gluetun`; it clears VPN credentials. Use:
