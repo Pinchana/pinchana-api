@@ -5,6 +5,10 @@ This script is intentionally strict: the tag must already exist locally, match
 VERSION, point at HEAD, and the version metadata/lockfiles must validate before
 anything is pushed. It then pushes the current branch and tag, and creates or
 updates the GitHub Release with gh.
+
+Use --retag only when a matching tag was created locally before the final
+release commit. It may move an unpushed local tag to HEAD, but it will never
+rewrite a tag that already exists on origin.
 """
 
 from __future__ import annotations
@@ -76,7 +80,16 @@ def ensure_submodules_pinned() -> None:
         )
 
 
-def validate_release(tag: str) -> None:
+def remote_tag_exists(tag: str) -> bool:
+    result = run(
+        ["git", "ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}"],
+        capture=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def validate_release(tag: str, *, retag: bool) -> None:
     run([sys.executable, str(VERSION_SCRIPT), "check", "--tag", tag])
 
     try:
@@ -85,8 +98,22 @@ def validate_release(tag: str) -> None:
         raise RuntimeError(f"local tag {tag} does not exist") from exc
 
     head = output(["git", "rev-parse", "HEAD"])
-    if tag_commit != head:
-        raise RuntimeError(f"{tag} points to {tag_commit}, but HEAD is {head}")
+    if tag_commit == head:
+        return
+    if not retag:
+        raise RuntimeError(
+            f"{tag} points to {tag_commit}, but HEAD is {head}; "
+            "use --retag only if this tag has never been pushed"
+        )
+    if remote_tag_exists(tag):
+        raise RuntimeError(
+            f"refusing to move {tag}: that tag already exists on origin"
+        )
+
+    version = VERSION_FILE.read_text(encoding="utf-8").strip()
+    run(["git", "tag", "-d", tag])
+    run(["git", "tag", "-a", tag, "-m", f"release: {version}"])
+    print(f"moved unpushed local tag {tag} to HEAD {head}")
 
 
 def release_exists(tag: str) -> bool:
@@ -121,28 +148,48 @@ def publish(
     run(["git", "push", "origin", f"refs/tags/{tag}:refs/tags/{tag}"])
 
     exists = release_exists(tag)
-    command = ["gh", "release", "edit" if exists else "create", tag]
     if not exists:
-        command.append("--verify-tag")
+        command = [
+            "gh",
+            "release",
+            "create",
+            tag,
+            "--verify-tag",
+            "--title",
+            title or tag,
+            *notes_args(description, description_file),
+        ]
+        if draft:
+            command.append("--draft")
+        if prerelease:
+            command.append("--prerelease")
+        run(command)
+        print(f"created GitHub Release {tag}")
+        return
 
-    command += ["--title", title or tag]
-
-    if exists:
-        if description is not None:
-            command += ["--notes", description]
-        elif description_file is not None:
-            command += ["--notes-file", str(description_file)]
-    else:
-        command += notes_args(description, description_file)
-
+    command = ["gh", "release", "edit", tag]
+    changed = False
+    if title is not None:
+        command += ["--title", title]
+        changed = True
+    if description is not None:
+        command += ["--notes", description]
+        changed = True
+    elif description_file is not None:
+        command += ["--notes-file", str(description_file)]
+        changed = True
     if draft:
-        command += ["--draft"] if not exists else ["--draft=true"]
+        command += ["--draft=true"]
+        changed = True
     if prerelease:
-        command += ["--prerelease"] if not exists else ["--prerelease=true"]
+        command += ["--prerelease=true"]
+        changed = True
 
-    run(command)
-    action = "updated" if exists else "created"
-    print(f"{action} GitHub Release {tag}")
+    if changed:
+        run(command)
+        print(f"updated GitHub Release {tag}")
+    else:
+        print(f"GitHub Release {tag} already exists")
 
 
 def main() -> int:
@@ -156,6 +203,11 @@ def main() -> int:
         "--description-file",
         type=Path,
         help="read GitHub Release description/body from a file",
+    )
+    parser.add_argument(
+        "--retag",
+        action="store_true",
+        help="move a mismatched local tag to HEAD only if it is absent from origin",
     )
     parser.add_argument("--draft", action="store_true", help="create/edit as draft")
     parser.add_argument(
@@ -177,7 +229,7 @@ def main() -> int:
 
         ensure_clean()
         ensure_submodules_pinned()
-        validate_release(tag)
+        validate_release(tag, retag=args.retag)
         publish(
             tag=tag,
             title=args.title,
