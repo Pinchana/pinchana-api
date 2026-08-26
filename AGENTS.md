@@ -45,7 +45,11 @@ For other modules, verify by importing the package or running the service locall
 
 ## CI, Releases & Docker Tags
 
-`.github/workflows/docker-publish.yml` builds GHCR images at `ghcr.io/pinchana/pinchana-api/<service>`. `VERSION` is the rolling product CalVer source of truth in `YY.MM.ITERATION` form. Run `python scripts/version.py check` to validate it and `python scripts/version.py bump` to advance the monthly counter and synchronize Python package metadata and lockfiles. Commit and push submodule version changes before the parent pointers.
+`.github/workflows/docker-publish.yml` builds GHCR images at `ghcr.io/pinchana/pinchana-api/<service>`. `VERSION` is the rolling product CalVer source of truth in `YY.MM.ITERATION` form.
+
+`python scripts/version.py bump` is the normal release-version operation. It initializes and synchronizes all submodules, safely fast-forwards stale submodule pins to their remote default branches, updates Python package metadata and `uv.lock` files, commits and pushes the affected submodules, then commits and pushes `VERSION` plus the new parent submodule pointers. `python scripts/version.py set YY.MM.N` does the same for an explicit version. Use `--local-only` only when a metadata-only edit without git commits/pushes is explicitly required.
+
+To publish in the same operation, use `python scripts/version.py bump --publish -n "release description"` or `-F RELEASE_NOTES.md`. This creates the matching annotated tag and delegates to `scripts/publish_release.py`, which pushes the tag and creates the GitHub Release through `gh`. If the matching tag was already created locally, run `python scripts/publish_release.py -n "release description"` instead. See `docs/RELEASING.md` for the full procedure and safety checks.
 
 Pushes to `main` publish `latest`. An exact matching tag such as `v26.08.1` publishes immutable `26.08.1`, monthly `26.08`, and `stable`. CI rejects mismatched tags, and neither the legacy `stable` branch nor manual dispatch can publish a release channel.
 
@@ -61,4 +65,4 @@ docker compose up -d --force-recreate gluetun
 
 ## Commit & Pull Request Guidelines
 
-History uses short imperative or conventional-style messages such as `fix: ...`, `feat: ...`, and `Prepare 0.2 beta release`. For submodule changes, commit and push inside the submodule first, then commit the updated submodule pointer in the root repo. PRs should describe affected services, runtime/config changes, and verification commands.
+History uses short imperative or conventional-style messages such as `fix: ...`, `feat: ...`, and `Prepare 0.2 beta release`. For submodule changes, commit and push inside the submodule first, then commit the updated submodule pointer in the root repo. The release scripts automate this ordering for version releases. PRs should describe affected services, runtime/config changes, and verification commands.
