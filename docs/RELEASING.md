@@ -68,6 +68,17 @@ The publisher refuses to continue unless:
 It then pushes the current branch, pushes that existing local tag, and creates
 (or updates) the GitHub Release via `gh`.
 
+If the tag was created locally *before* the final parent/submodule release
+commit, repair the version first and explicitly move that unpushed local tag:
+
+```bash
+python scripts/version.py set 26.08.7
+python scripts/publish_release.py --retag -n "Threads and X fixes"
+```
+
+`--retag` refuses to move a tag that already exists on `origin`, so an already
+published release tag can never be rewritten accidentally.
+
 Examples:
 
 ```bash
