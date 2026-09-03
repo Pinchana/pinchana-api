@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomically pull and pin the latest Pinchana rolling release images."""
+"""Atomically pull and pin Pinchana rolling release and Gluetun images."""
 
 from __future__ import annotations
 
@@ -32,6 +32,12 @@ DLP_IMAGES = {
     "DLP_API_IMAGE": "ghcr.io/pinchana/pinchana-api/dlp-api",
     "DLP_ORCHESTRATOR_IMAGE": "ghcr.io/pinchana/pinchana-api/dlp-orchestrator",
     "DLP_WORKER_IMAGE": "ghcr.io/pinchana/pinchana-api/dlp-worker",
+}
+EXTERNAL_IMAGES = {
+    "GLUETUN_IMAGE": ("qmcgaw/gluetun", "latest"),
+}
+DLP_EXTERNAL_IMAGES = {
+    "DLP_VPN_IMAGE": ("qmcgaw/gluetun", "latest"),
 }
 CALVER_PATTERN = re.compile(r"^\d{2}\.(?:0[1-9]|1[0-2])\.(?:[1-9]\d*)$")
 DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -115,6 +121,15 @@ def resolve_pin(name: str, repository: str) -> ImagePin:
     return ImagePin(name, version, immutable_reference(repository, metadata, versioned))
 
 
+def resolve_external_pin(name: str, repository: str, tag: str) -> ImagePin:
+    """Resolve a third-party rolling tag without requiring Pinchana CalVer labels."""
+    rolling = f"{repository}:{tag}"
+    print(f"Discovering {name} from {rolling} ...", flush=True)
+    run(["docker", "pull", rolling])
+    metadata = inspect_image(rolling)
+    return ImagePin(name, tag, immutable_reference(repository, metadata, rolling))
+
+
 def write_pins(env_file: Path, source: str, pins: list[ImagePin]) -> None:
     for pin in pins:
         assignment = re.compile(rf"(?m)^(\s*(?:export\s+)?{pin.name}\s*=).*$")
@@ -159,15 +174,27 @@ def main() -> int:
     if args.dlp:
         selected.update(DLP_IMAGES)
 
-    pins = [
+    release_pins = [
         resolve_pin(name, configured_repository(source, name, default))
         for name, default in selected.items()
     ]
-    versions = {pin.version for pin in pins}
+    versions = {pin.version for pin in release_pins}
     if len(versions) != 1:
-        details = ", ".join(f"{pin.name}={pin.version}" for pin in pins)
+        details = ", ".join(f"{pin.name}={pin.version}" for pin in release_pins)
         raise RuntimeError(f"Rolling images are not from one release: {details}")
 
+    external = dict(EXTERNAL_IMAGES)
+    if args.dlp:
+        external.update(DLP_EXTERNAL_IMAGES)
+    external_pins = [
+        resolve_external_pin(
+            name,
+            configured_repository(source, name, default_repository),
+            tag,
+        )
+        for name, (default_repository, tag) in external.items()
+    ]
+    pins = release_pins + external_pins
     version = versions.pop()
     if args.dry_run:
         print("Dry run; no file was changed.")

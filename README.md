@@ -70,10 +70,11 @@ docker compose --env-file .env up --detach
 ```
 
 This is the supported production update path. It discovers the newest coherent
-CalVer release through the rolling `stable` channel, pulls every exact release
-tag, and atomically stores immutable image digests in `.env`. By default it
-updates the gateway and scraper APIs only. Add `--dlp` to include all three DLP
-images in the same release check; without that flag, DLP values are untouched.
+CalVer release through the rolling `stable` channel, resolves the current
+Gluetun image, and atomically stores immutable image digests in `.env`. By
+default it updates the main Gluetun, gateway, and scraper APIs. Add `--dlp` to
+include all three DLP images and its dedicated Gluetun image; without that flag,
+DLP values are untouched.
 
 Build from source without a VPN (each service binds its own development port):
 
@@ -252,6 +253,14 @@ python scripts/update_rolling.py --env-file .env --dry-run
 python scripts/update_rolling.py --env-file .env
 # Include DLP only when that profile should advance with the API release:
 python scripts/update_rolling.py --env-file .env --dlp
+```
+
+When the Gluetun digest changes, recreate it before applying the rest of the
+stack; never use `docker restart gluetun`:
+
+```bash
+docker compose --env-file .env up --detach --force-recreate gluetun
+docker compose --env-file .env up --detach
 ```
 
 ## Adding a Module

@@ -14,6 +14,12 @@ docker compose --env-file .env up --detach
 docker compose --env-file .env ps
 ```
 
+The rolling updater pins both Pinchana release images and Gluetun by digest.
+Gluetun uses its encrypted DNS proxy with Cloudflare only; Compose supplies
+`1.1.1.1` and `1.0.0.1` for bootstrap and health fallback. Google resolvers are
+not used. Its authenticated control API binds to `127.0.0.1` on the Docker host
+by default; scraper services access it privately through the shared namespace.
+
 ## Local source build
 
 ```sh

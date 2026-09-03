@@ -13,7 +13,7 @@ python3 scripts/update_rolling.py --env-file .env --dlp --dry-run
 python3 scripts/update_rolling.py --env-file .env --dlp
 ```
 
-The updater resolves the repository already configured for each service, discovers the newest released CalVer through `stable`, verifies that every selected API and DLP image reports the same release, pulls each exact version tag, and pins its digest. It writes nothing until all selected digests resolve successfully. `--dlp` is required to touch `DLP_API_IMAGE`, `DLP_ORCHESTRATOR_IMAGE`, or `DLP_WORKER_IMAGE`; the updater leaves `DLP_VPN_IMAGE` unchanged.
+The updater resolves the repository already configured for each service, discovers the newest released CalVer through `stable`, verifies that every selected API and DLP image reports the same release, and pins all selected images by digest. Gluetun is resolved independently because it does not carry Pinchana CalVer labels. It writes nothing until all selected digests resolve successfully. `--dlp` is required to touch `DLP_API_IMAGE`, `DLP_ORCHESTRATOR_IMAGE`, `DLP_WORKER_IMAGE`, or `DLP_VPN_IMAGE`.
 
 The resulting production values are immutable:
 
@@ -21,7 +21,7 @@ The resulting production values are immutable:
 DLP_API_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-api@sha256:...
 DLP_ORCHESTRATOR_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-orchestrator@sha256:...
 DLP_WORKER_IMAGE=ghcr.io/pinchana/pinchana-api/dlp-worker@sha256:...
-DLP_VPN_IMAGE=qmcgaw/gluetun:v3.40.0
+DLP_VPN_IMAGE=qmcgaw/gluetun@sha256:...
 DLP_DOH_URL=https://cloudflare-dns.com/dns-query
 ```
 

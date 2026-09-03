@@ -88,6 +88,14 @@ def validate_compose(config: dict[str, object], phase: str) -> None:
         fail("The DLP API must use an HTTPS DNS-over-HTTPS resolver")
     if api_environment.get("DLP_DOH_PROXY_URL") != "http://dlp-vpn:8888":
         fail("The DLP API must resolve public targets through the dedicated DLP VPN")
+    vpn = services["dlp-vpn"]
+    vpn_environment = vpn.get("environment", {})
+    if vpn.get("dns") != ["1.1.1.1", "1.0.0.1"]:
+        fail("The DLP VPN must use Cloudflare bootstrap DNS with its backup")
+    if vpn_environment.get("DNS_UPSTREAM_RESOLVERS") != "cloudflare":
+        fail("The DLP VPN encrypted DNS upstream must be Cloudflare only")
+    if vpn_environment.get("HEALTH_ICMP_TARGET_IPS") != "1.1.1.1,1.0.0.1":
+        fail("The DLP VPN health targets must not fall back to Google DNS")
     orchestrator = services["dlp-orchestrator"]
     if set(orchestrator.get("cap_drop", [])) != {"ALL"} or set(orchestrator.get("cap_add", [])) != {"CHOWN"}:
         fail("The DLP orchestrator must drop all capabilities and add back only CHOWN")
