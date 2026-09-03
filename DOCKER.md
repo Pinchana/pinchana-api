@@ -14,7 +14,8 @@ docker compose --env-file .env up --detach
 docker compose --env-file .env ps
 ```
 
-The rolling updater pins both Pinchana release images and Gluetun by digest.
+The rolling updater pins both Pinchana release images and Gluetun's stable `v3`
+channel by digest. It deliberately does not consume Gluetun's edge `latest` tag.
 Gluetun uses its encrypted DNS proxy with Cloudflare only; Compose supplies
 `1.1.1.1` and `1.0.0.1` for bootstrap and health fallback. Google resolvers are
 not used. Its authenticated control API binds to `127.0.0.1` on the Docker host

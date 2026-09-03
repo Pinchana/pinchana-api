@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -113,8 +114,10 @@ def validate_images(environment: dict[str, str], skip_check: bool) -> None:
         image = environment.get(name, "")
         if not image:
             fail(f"{name} is required")
-        if image.endswith(":latest") or ":latest@" in image:
-            fail(f"{name} must use an immutable release tag or digest, not latest")
+        immutable_digest = "@sha256:" in image
+        immutable_version_tag = re.search(r":v?\d+(?:\.\d+){2}$", image) is not None
+        if not immutable_digest and not immutable_version_tag:
+            fail(f"{name} must use an immutable release tag or digest")
         if not skip_check:
             result = subprocess.run(
                 ["docker", "image", "inspect", image],

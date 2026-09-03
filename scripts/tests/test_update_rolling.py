@@ -24,7 +24,7 @@ class UpdateRollingTests(unittest.TestCase):
                 return ""
             self.assertEqual(
                 command,
-                ["docker", "image", "inspect", "qmcgaw/gluetun:latest"],
+                ["docker", "image", "inspect", "qmcgaw/gluetun:v3"],
             )
             self.assertTrue(capture)
             return json.dumps(
@@ -33,10 +33,10 @@ class UpdateRollingTests(unittest.TestCase):
 
         with mock.patch.object(update_rolling, "run", side_effect=fake_run):
             pin = update_rolling.resolve_external_pin(
-                "GLUETUN_IMAGE", "qmcgaw/gluetun", "latest"
+                "GLUETUN_IMAGE", "qmcgaw/gluetun", "v3"
             )
 
-        self.assertEqual(pin.version, "latest")
+        self.assertEqual(pin.version, "v3")
         self.assertEqual(pin.reference, f"qmcgaw/gluetun@{digest}")
 
     def test_main_always_updates_main_gluetun_and_leaves_dlp_without_flag(self):
@@ -64,7 +64,7 @@ class UpdateRollingTests(unittest.TestCase):
 
         self.assertEqual(
             observed_external,
-            [("GLUETUN_IMAGE", "qmcgaw/gluetun", "latest")],
+            [("GLUETUN_IMAGE", "qmcgaw/gluetun", "v3")],
         )
 
     def test_dlp_flag_updates_dedicated_gluetun(self):

@@ -1,6 +1,6 @@
 services:
   gluetun:
-    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:latest}
+    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:v3}
     container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
     dns:
       - 1.1.1.1
@@ -377,7 +377,7 @@ services:
 
   dlp-vpn:
     profiles: ["dlp"]
-    image: ${DLP_VPN_IMAGE:-qmcgaw/gluetun:v3.40.0}
+    image: ${DLP_VPN_IMAGE:-qmcgaw/gluetun:v3}
     cap_add: [NET_ADMIN]
     devices: [/dev/net/tun:/dev/net/tun]
     dns: [1.1.1.1, 1.0.0.1]
