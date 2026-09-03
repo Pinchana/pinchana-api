@@ -27,7 +27,7 @@ DLP_DOH_URL=https://cloudflare-dns.com/dns-query
 
 ## 2. Prepare secrets and storage
 
-Generate three distinct random values of at least 32 characters for `DLP_GATEWAY_TOKEN`, `DLP_OWNER_SECRET`, and `DLP_REDIS_PASSWORD`. Keep `DLP_ENABLED=false`. Preserve the existing production Turnstile and VPN secrets.
+Generate three distinct random values of at least 32 characters for `DLP_GATEWAY_TOKEN`, `DLP_OWNER_SECRET`, and `DLP_REDIS_PASSWORD`. Keep `DLP_ENABLED=false`. Preserve the existing production Turnstile and VPN secrets. For NordVPN, configure `VPN_TYPE=openvpn`, `OPENVPN_PROTOCOL=tcp`, and its Manual setup service username and password. An access token or normal account password is not an OpenVPN service credential. Providers with supported manual WireGuard provisioning can use `VPN_TYPE=wireguard` and `WIREGUARD_PRIVATE_KEY` instead. Do not put whitespace after commas in `SERVER_COUNTRIES`.
 
 Create the temporary job root on the Docker host. It must not be a symlink or world-writable. Job directories are created as UID/GID `10001` with mode `0700`, shared only by the ephemeral worker and read-only DLP API mount.
 

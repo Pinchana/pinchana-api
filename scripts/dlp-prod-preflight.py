@@ -13,7 +13,13 @@ import sys
 from pathlib import Path
 
 
-PLACEHOLDER_FRAGMENTS = ("replace-with", "disabled-change-me", "your_private_key_here")
+PLACEHOLDER_FRAGMENTS = (
+    "replace-with",
+    "disabled-change-me",
+    "your_private_key_here",
+    "your_service_username_here",
+    "your_service_password_here",
+)
 DLP_IMAGES = ("DLP_API_IMAGE", "DLP_ORCHESTRATOR_IMAGE", "DLP_WORKER_IMAGE", "DLP_VPN_IMAGE")
 
 
@@ -47,6 +53,24 @@ def require_secret(environment: dict[str, str], name: str, minimum: int = 32) ->
     if len(value) < minimum or any(fragment in lowered for fragment in PLACEHOLDER_FRAGMENTS):
         fail(f"{name} must be a non-placeholder secret of at least {minimum} characters")
     return value
+
+
+def validate_vpn_credentials(environment: dict[str, str]) -> None:
+    vpn_type = environment.get("VPN_TYPE", "wireguard").strip().lower()
+    if vpn_type == "wireguard":
+        require_secret(environment, "WIREGUARD_PRIVATE_KEY", minimum=20)
+    elif vpn_type == "openvpn":
+        require_secret(environment, "OPENVPN_USER", minimum=6)
+        require_secret(environment, "OPENVPN_PASSWORD", minimum=8)
+        protocol = environment.get("OPENVPN_PROTOCOL", "tcp").strip().lower()
+        if protocol not in {"tcp", "udp"}:
+            fail("OPENVPN_PROTOCOL must be tcp or udp")
+    else:
+        fail("VPN_TYPE must be wireguard or openvpn")
+
+    countries = environment.get("SERVER_COUNTRIES", "")
+    if any(country != country.strip() for country in countries.split(",")):
+        fail("SERVER_COUNTRIES entries must not contain surrounding whitespace")
 
 
 def compose_config(env_file: Path) -> dict[str, object]:
@@ -95,6 +119,8 @@ def validate_compose(config: dict[str, object], phase: str) -> None:
         fail("The DLP VPN must use Cloudflare bootstrap DNS with its backup")
     if vpn_environment.get("DNS_UPSTREAM_RESOLVERS") != "cloudflare":
         fail("The DLP VPN encrypted DNS upstream must be Cloudflare only")
+    if str(vpn_environment.get("DNS_UPSTREAM_RESOLVER_TYPE", "")).lower() not in {"doh", "dot"}:
+        fail("The DLP VPN DNS upstream must use DoH or DoT")
     if vpn_environment.get("HEALTH_ICMP_TARGET_IPS") != "1.1.1.1,1.0.0.1":
         fail("The DLP VPN health targets must not fall back to Google DNS")
     orchestrator = services["dlp-orchestrator"]
@@ -150,7 +176,7 @@ def main() -> int:
     require_secret(environment, "TURNSTILE_SECRET_KEY", minimum=10)
     if not environment.get("TURNSTILE_EXPECTED_HOSTNAME", "").strip():
         fail("TURNSTILE_EXPECTED_HOSTNAME is required")
-    require_secret(environment, "WIREGUARD_PRIVATE_KEY", minimum=20)
+    validate_vpn_credentials(environment)
 
     jobs_dir = Path(environment.get("DLP_HOST_JOBS_DIR", ""))
     if not jobs_dir.is_absolute() or not jobs_dir.is_dir() or jobs_dir.is_symlink():

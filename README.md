@@ -47,12 +47,22 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-For the production stack, set at least:
+For the production stack, set at least the API key and VPN credentials. NordVPN
+manual connections should use the service username and password shown under
+Nord Account's Manual setup page:
 
 ```env
-WIREGUARD_PRIVATE_KEY=REPLACE_WITH_PROVIDER_WIREGUARD_PRIVATE_KEY
+VPN_SERVICE_PROVIDER=nordvpn
+VPN_TYPE=openvpn
+OPENVPN_USER=REPLACE_WITH_NORDVPN_SERVICE_USERNAME
+OPENVPN_PASSWORD=REPLACE_WITH_NORDVPN_SERVICE_PASSWORD
+OPENVPN_PROTOCOL=tcp
 PINCHANA_API_KEYS={"automation":"REPLACE_WITH_LONG_RANDOM_MACHINE_KEY"}
 ```
+
+Do not use the Nord Account password or access token as the OpenVPN password.
+Providers that still issue supported manual WireGuard keys can instead set
+`VPN_TYPE=wireguard` and `WIREGUARD_PRIVATE_KEY`.
 
 For Spotify scraping, also set:
 

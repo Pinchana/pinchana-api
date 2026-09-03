@@ -25,7 +25,7 @@ docker compose up -d
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-Both compose files require `.env` with `WIREGUARD_PRIVATE_KEY`; start from `.env.example`.
+Both compose files read VPN credentials from `.env`; start from `.env.example`. NordVPN production deployments use its manual OpenVPN service credentials, while providers with supported manual WireGuard provisioning use `WIREGUARD_PRIVATE_KEY`.
 
 ## Coding Style & Naming Conventions
 
