@@ -155,3 +155,21 @@ modules:
       cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
       env:
         CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
+
+  coub:
+    enabled: true
+    route_patterns: ["coub.com/view/", "coub.com/embed/"]
+    source:
+      type: local
+      path: /modules/pinchana-coub
+    container:
+      dockerfile: Dockerfile
+      port: "${MODULE_COUB_PORT:-8090}"
+      endpoint: "${MODULE_COUB_ENDPOINT:-http://localhost:8090}"
+      image_tag: "${MODULE_COUB_IMAGE_TAG:-pinchana-module-coub}"
+      container_name: "${MODULE_COUB_CONTAINER_NAME:-pinchana-coub}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
+      env:
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
+        COUB_FFMPEG_TIMEOUT_SECONDS: "${COUB_FFMPEG_TIMEOUT_SECONDS:-300}"

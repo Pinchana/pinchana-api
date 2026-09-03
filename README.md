@@ -21,6 +21,7 @@ Pinchana API is a Docker Compose-based media extraction gateway. A central FastA
 | deezer | 8087 | `deezer.com`, Deezer link domains |
 | threads | 8088 | `threads.net`, `threads.com` |
 | twitter | 8089 | `x.com`, `twitter.com`, `vxtwitter.com`, `fxtwitter.com` |
+| coub | 8090 | `coub.com/view`, `coub.com/embed` |
 
 Gluetun's control API is exposed on port `8000`.
 
@@ -96,7 +97,7 @@ curl --fail-with-body --silent --show-error \
   --data '{"url":"https://www.instagram.com/p/REPLACE_WITH_PUBLIC_SHORTCODE/"}'
 ```
 
-The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/v1/scrape`, legacy `/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
+The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, Coub, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/v1/scrape`, legacy `/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
 
 `/v1/scrape` returns `{data, meta}`. Source, content, author, engagement, safety,
 music, and link metadata are grouped, while all downloadable images, videos,

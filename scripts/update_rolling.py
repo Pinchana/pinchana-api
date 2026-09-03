@@ -26,6 +26,7 @@ API_IMAGES = {
     "DEEZER_IMAGE": "ghcr.io/pinchana/pinchana-api/deezer",
     "THREADS_IMAGE": "ghcr.io/pinchana/pinchana-api/threads",
     "TWITTER_IMAGE": "ghcr.io/pinchana/pinchana-api/twitter",
+    "COUB_IMAGE": "ghcr.io/pinchana/pinchana-api/coub",
 }
 DLP_IMAGES = {
     "DLP_API_IMAGE": "ghcr.io/pinchana/pinchana-api/dlp-api",

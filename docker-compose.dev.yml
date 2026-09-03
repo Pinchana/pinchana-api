@@ -18,6 +18,7 @@ services:
       - "${DEEZER_HOST_PORT:-8087}:8087"                     # Deezer scraper
       - "${THREADS_HOST_PORT:-8088}:8088"                     # Threads scraper
       - "${TWITTER_HOST_PORT:-8089}:8089"                     # Twitter/X scraper
+      - "${COUB_HOST_PORT:-8090}:8090"                         # Coub scraper
       - "${GLUETUN_CONTROL_HOST_PORT:-8000}:${GLUETUN_CONTROL_PORT:-8000}"  # Gluetun control server
     environment:
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-nordvpn}
@@ -92,6 +93,7 @@ services:
       - MODULE_DEEZER_PORT=${MODULE_DEEZER_PORT:-8087}
       - MODULE_THREADS_PORT=${MODULE_THREADS_PORT:-8088}
       - MODULE_TWITTER_PORT=${MODULE_TWITTER_PORT:-8089}
+      - MODULE_COUB_PORT=${MODULE_COUB_PORT:-8090}
       - MODULE_TIKTOK_ENDPOINT=${DEV_MODULE_TIKTOK_ENDPOINT:-http://tiktok:8081}
       - MODULE_INSTAGRAM_ENDPOINT=${DEV_MODULE_INSTAGRAM_ENDPOINT:-http://instagram:8082}
       - MODULE_SHORTS_ENDPOINT=${DEV_MODULE_SHORTS_ENDPOINT:-http://shorts:8083}
@@ -101,6 +103,7 @@ services:
       - MODULE_DEEZER_ENDPOINT=${DEV_MODULE_DEEZER_ENDPOINT:-http://deezer:8087}
       - MODULE_THREADS_ENDPOINT=${DEV_MODULE_THREADS_ENDPOINT:-http://threads:8088}
       - MODULE_TWITTER_ENDPOINT=${DEV_MODULE_TWITTER_ENDPOINT:-http://twitter:8089}
+      - MODULE_COUB_ENDPOINT=${DEV_MODULE_COUB_ENDPOINT:-http://coub:8090}
     networks: [default, dlp-gateway]
 
   tiktok:
@@ -260,6 +263,21 @@ services:
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+
+  coub:
+    build:
+      context: .
+      dockerfile: ./pinchana-coub/Dockerfile
+    container_name: ${COUB_CONTAINER_NAME:-pinchana-coub-dev}
+    ports:
+      - "${COUB_HOST_PORT:-8090}:8090"
+    volumes:
+      - scraper-cache:/app/cache
+    environment:
+      - VPN_ENABLED=false
+      - CACHE_PATH=/app/cache
+      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - COUB_FFMPEG_TIMEOUT_SECONDS=${COUB_FFMPEG_TIMEOUT_SECONDS:-300}
 
   dlp-redis:
     profiles: ["dlp"]

@@ -34,3 +34,6 @@
 [submodule "pinchana-dlp"]
 	path = pinchana-dlp
 	url = https://github.com/Pinchana/pinchana-dlp.git
+[submodule "pinchana-coub"]
+	path = pinchana-coub
+	url = https://github.com/Pinchana/pinchana-coub.git
