@@ -54,6 +54,10 @@ jobs:
         working-directory: pinchana-server
         run: uv run --with pytest pytest -q
 
+      - name: Test Coub scraper
+        working-directory: pinchana-coub
+        run: uv run pytest -q
+
       - name: Validate production Compose profiles
         run: |
           docker compose config --quiet
@@ -93,7 +97,7 @@ jobs:
 
           # For tags, build everything
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"coub"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
             echo "Tag push — building all services"
             exit 0
           fi
@@ -105,14 +109,14 @@ jobs:
 
           # If release policy, workflow, or compose changed, build everything
           if echo "$CHANGED" | grep -qE '^VERSION$|^scripts/version\.py$|^\.github/workflows/docker-publish\.yml|^docker-compose\.yml$'; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"coub"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
             echo "Release policy/workflow/compose changed — building all services"
             exit 0
           fi
 
           # If pinchana-core changed, build everything (all services depend on it)
           if echo "$CHANGED" | grep -qE '^pinchana-core/|^pinchana-core$'; then
-            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"include": [{"service":"server"},{"service":"tiktok"},{"service":"instagram"},{"service":"shorts"},{"service":"soundcloud"},{"service":"ytmusic"},{"service":"spotify"},{"service":"deezer"},{"service":"threads"},{"service":"twitter"},{"service":"coub"},{"service":"dlp-api"},{"service":"dlp-orchestrator"},{"service":"dlp-worker"}]}' >> $GITHUB_OUTPUT
             echo "pinchana-core changed — building all services"
             exit 0
           fi
@@ -120,7 +124,7 @@ jobs:
           # Build only services whose submodules changed
           matrix='{"include": ['
           first=1
-          for svc in server tiktok instagram shorts soundcloud ytmusic spotify deezer threads twitter dlp-api dlp-orchestrator dlp-worker; do
+          for svc in server tiktok instagram shorts soundcloud ytmusic spotify deezer threads twitter coub dlp-api dlp-orchestrator dlp-worker; do
             dir="pinchana-${svc}"
             # Service name 'instagram' maps to the pinchana-inst/ submodule
             [ "$svc" = "instagram" ] && dir="pinchana-inst"
@@ -182,6 +186,7 @@ jobs:
             deezer)     echo "dockerfile=./pinchana-deezer/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/deezer" >> $GITHUB_OUTPUT ;;
             threads)    echo "dockerfile=./pinchana-threads/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/threads" >> $GITHUB_OUTPUT ;;
             twitter)    echo "dockerfile=./pinchana-twitter/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/twitter" >> $GITHUB_OUTPUT ;;
+            coub)       echo "dockerfile=./pinchana-coub/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/coub" >> $GITHUB_OUTPUT ;;
             dlp-api)          echo "context=./pinchana-dlp/api" >> $GITHUB_OUTPUT; echo "dockerfile=./pinchana-dlp/api/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/dlp-api" >> $GITHUB_OUTPUT ;;
             dlp-orchestrator) echo "context=./pinchana-dlp/orchestrator" >> $GITHUB_OUTPUT; echo "dockerfile=./pinchana-dlp/orchestrator/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/dlp-orchestrator" >> $GITHUB_OUTPUT ;;
             dlp-worker)       echo "context=./pinchana-dlp/worker" >> $GITHUB_OUTPUT; echo "dockerfile=./pinchana-dlp/worker/Dockerfile" >> $GITHUB_OUTPUT; echo "image=$REPO_LOWER/dlp-worker" >> $GITHUB_OUTPUT ;;
