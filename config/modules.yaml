@@ -1,7 +1,7 @@
 modules:
   tiktok:
     enabled: true
-    route_patterns: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"]
+    route_patterns: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com", "tt.site"]
     source:
       type: local
       path: /modules/pinchana-tiktok
