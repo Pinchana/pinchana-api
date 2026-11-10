@@ -812,7 +812,7 @@ wheels = [
 
 [[package]]
 name = "pinchana-apple-music"
-version = "26.11.2"
+version = "26.11.3"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -831,7 +831,7 @@ requires-dist = [
 
 [[package]]
 name = "pinchana-core"
-version = "26.11.2"
+version = "26.11.3"
 source = { directory = "../pinchana-core" }
 dependencies = [
     { name = "aiohttp" },
