@@ -9,7 +9,11 @@ only in the `x-api-key` header. Socialcrawl's `apple_music/track` endpoint
 provides title and artist metadata; its preview audio is never downloaded.
 The service searches YouTube Music for `artist title official audio`, using
 the same song search and shared yt-dlp/MP3 pipeline as Spotify. Matches can
-differ from the original Apple Music recording. No Spotify credentials are needed.
+differ from the original Apple Music recording. Audio download does not require Spotify credentials. Artwork uses Socialcrawl
+`content.thumbnail_url` when available; otherwise optional `SPOTIFY_CLIENT_ID`
+and `SPOTIFY_CLIENT_SECRET` enable a Spotify search matching title, artist and
+duration. Spotify outages or missing artwork never block the audio download.
+Covers are embedded in the MP3 and served as the audio thumbnail.
 
 Socialcrawl costs 1 credit per uncached successful lookup. Contract and pricing
 were verified using the free utility guide and `dry_run=1`; production does

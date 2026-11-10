@@ -12,6 +12,7 @@ from pinchana_core.music import MusicDownloader, MusicDownloadError
 from pinchana_core.plugins import ScraperPlugin, registry
 from pinchana_core.storage import MediaStorage
 
+from .artwork import spotify_artwork
 from .socialcrawl import SocialCrawlResolver, track_id
 
 router = APIRouter()
@@ -52,6 +53,7 @@ async def process_scrape_request(request: ScrapeRequest):
         metadata = await resolver.resolve(url)
         if metadata is None:
             raise HTTPException(404, "Apple Music track not found")
+        metadata = await spotify_artwork(metadata)
         try:
             mp3, meta = await AppleMusicDownloader(metadata).download(url)
         except MusicDownloadError:
@@ -59,9 +61,12 @@ async def process_scrape_request(request: ScrapeRequest):
         audio = storage.audio_path(shortcode)
         if mp3 != audio:
             mp3.replace(audio)
+        cover = audio.with_name("cover.jpg")
+        cover_url = f"/media/apple_music/{shortcode}/cover.jpg" if cover.is_file() else None
         response = ScrapeResponse(
             shortcode=shortcode, caption=meta["title"], author=meta["artist"],
-            media_type="audio", thumbnail_url="",
+            media_type="audio", thumbnail_url=cover_url or "", cover_url=cover_url,
+            album=meta.get("album"),
             audio_url=f"/media/apple_music/{shortcode}/audio.mp3",
             title=meta["title"], duration=meta.get("duration"),
         )

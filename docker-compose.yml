@@ -250,6 +250,8 @@ services:
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
       - SOCIALCRAWL_API_KEY=${SOCIALCRAWL_API_KEY:-}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
     restart: always
 
   deezer:

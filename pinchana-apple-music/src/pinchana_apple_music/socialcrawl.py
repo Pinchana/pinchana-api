@@ -109,4 +109,6 @@ class SocialCrawlResolver:
         except (ValueError, TypeError, OverflowError):
             duration = None
         return {"id": f"am-{identifier}", "title": title.strip(), "artist": artist.strip(),
-                "duration": duration, "cover_url": None, "album": None}
+                "duration": duration, "cover_url": (content.get("thumbnail_url")
+                    if isinstance(content.get("thumbnail_url"), str)
+                    and content["thumbnail_url"].startswith("https://") else None), "album": None}
