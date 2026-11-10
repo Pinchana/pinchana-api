@@ -58,6 +58,12 @@ jobs:
         working-directory: pinchana-server
         run: uv run --with pytest pytest -q
 
+      - name: Test music download scope isolation
+        run: |
+          for module in pinchana-core pinchana-ytmusic pinchana-spotify pinchana-deezer pinchana-soundcloud; do
+            uv run --directory "$module" --with pytest --with pytest-asyncio python -m pytest -q
+          done
+
       - name: Test TikTok format selection and extraction
         working-directory: pinchana-tiktok
         run: uv run --with pytest --with pytest-asyncio python -m pytest -q
