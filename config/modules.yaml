@@ -14,6 +14,7 @@ modules:
       network: "${MODULE_NETWORK:-container:gluetun}"
       cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
       env:
+        TIKTOK_NORMALIZE_AUDIO: "${TIKTOK_NORMALIZE_AUDIO:-true}"
         CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
 
   instagram:
