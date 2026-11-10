@@ -1,6 +1,6 @@
 [project]
 name = "pinchana-apple-music"
-version = "26.11.1"
+version = "26.11.2"
 description = "Apple Music track downloader for Pinchana"
 readme = "README.md"
 requires-python = ">=3.13"
