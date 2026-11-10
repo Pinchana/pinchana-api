@@ -350,8 +350,11 @@ def has_staged_changes(path: Path) -> bool:
 
 def commit_submodule_versions(version: Version) -> None:
     message = f"release: {version.value}"
+    submodules = set(submodule_paths())
     for project_path in project_files():
         path = project_path.parent
+        if path not in submodules:
+            continue  # Parent-owned packages are committed with the parent.
         git("add", "pyproject.toml", "uv.lock", cwd=path)
         if has_staged_changes(path):
             git("commit", "-m", message, cwd=path)
@@ -378,6 +381,12 @@ def root_branch() -> str:
 def commit_and_push_parent(version: Version, states: list[SubmoduleState]) -> None:
     branch = root_branch()
     relative_paths = [str(state.path.relative_to(ROOT)) for state in states]
+    submodules = set(submodule_paths())
+    for project in project_files():
+        if project.parent not in submodules:
+            relative_paths.extend(str(path.relative_to(ROOT)) for path in (
+                project, project.with_name("uv.lock"),
+            ))
     git("add", "VERSION", *relative_paths)
     if not has_staged_changes(ROOT):
         raise RuntimeError(

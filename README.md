@@ -17,6 +17,7 @@ Pinchana API is a Docker Compose-based media extraction gateway. A central FastA
 | shorts | 8083 | `youtube.com/shorts` |
 | soundcloud | 8084 | `soundcloud.com`, `on.soundcloud.com` |
 | ytmusic | 8085 | `music.youtube.com` |
+| apple_music | 8091 | `music.apple.com` (individual tracks only) |
 | spotify | 8086 | `open.spotify.com` |
 | deezer | 8087 | `deezer.com`, Deezer link domains |
 | threads | 8088 | `threads.net`, `threads.com` |
@@ -286,3 +287,14 @@ Adding a service requires coordinated changes:
 ## License
 
 MIT. See `LICENSE`.
+
+Apple Music uses the parent-owned `pinchana-apple-music/` package and the
+`apple_music` Compose service on port 8091. Configure `SOCIALCRAWL_API_KEY`
+for metadata lookup; audio is matched and downloaded through YouTube Music.
+Only individual tracks are accepted, including album URLs with a selected
+`?i=TRACK_ID`. See [the module guide](pinchana-apple-music/README.md).
+
+Python dependencies and build backends were refreshed across all API packages,
+including the DLP requirements files. The Threads module's `pyee` version is
+limited by Playwright's declared `pyee<15` requirement. Refresh each package's
+lockfile with `uv lock --upgrade` and install it with `uv sync --frozen`.

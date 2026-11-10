@@ -22,6 +22,7 @@ API_IMAGES = {
     "SHORTS_IMAGE": "ghcr.io/pinchana/pinchana-api/shorts",
     "SOUNDCLOUD_IMAGE": "ghcr.io/pinchana/pinchana-api/soundcloud",
     "YTMUSIC_IMAGE": "ghcr.io/pinchana/pinchana-api/ytmusic",
+    "APPLE_MUSIC_IMAGE": "ghcr.io/pinchana/pinchana-api/apple-music",
     "SPOTIFY_IMAGE": "ghcr.io/pinchana/pinchana-api/spotify",
     "DEEZER_IMAGE": "ghcr.io/pinchana/pinchana-api/deezer",
     "THREADS_IMAGE": "ghcr.io/pinchana/pinchana-api/threads",

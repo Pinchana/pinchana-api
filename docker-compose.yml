@@ -20,6 +20,7 @@ services:
       - "${DEEZER_HOST_PORT:-8087}:8087"                     # Deezer scraper
       - "${THREADS_HOST_PORT:-8088}:8088"                     # Threads scraper
       - "${TWITTER_HOST_PORT:-8089}:8089"                     # Twitter/X scraper
+      - "${APPLE_MUSIC_HOST_PORT:-8091}:8091"                     # Apple Music scraper
       - "${COUB_HOST_PORT:-8090}:8090"                         # Coub scraper
       - "${GLUETUN_CONTROL_BIND_ADDRESS:-127.0.0.1}:${GLUETUN_CONTROL_HOST_PORT:-8000}:${GLUETUN_CONTROL_PORT:-8000}"  # Gluetun control server
     environment:
@@ -72,6 +73,7 @@ services:
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
       - PINCHANA_API_KEYS=${PINCHANA_API_KEYS:-}
       - PINCHANA_TELEGRAM_CLIENTS=${PINCHANA_TELEGRAM_CLIENTS:-bot}
+      - PINCHANA_CACHE_ADMIN_CLIENTS=${PINCHANA_CACHE_ADMIN_CLIENTS-bot,telegram-bot}
       - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:-}
       - TURNSTILE_EXPECTED_HOSTNAME=${TURNSTILE_EXPECTED_HOSTNAME:-}
       - TURNSTILE_EXPECTED_ACTION=${TURNSTILE_EXPECTED_ACTION:-turnstile-spin-v1}
@@ -103,6 +105,7 @@ services:
       - MODULE_SOUNDCLOUD_PORT=${MODULE_SOUNDCLOUD_PORT:-8084}
       - MODULE_YTMUSIC_PORT=${MODULE_YTMUSIC_PORT:-8085}
       - MODULE_SPOTIFY_PORT=${MODULE_SPOTIFY_PORT:-8086}
+      - MODULE_APPLE_MUSIC_PORT=${MODULE_APPLE_MUSIC_PORT:-8091}
       - MODULE_DEEZER_PORT=${MODULE_DEEZER_PORT:-8087}
       - MODULE_THREADS_PORT=${MODULE_THREADS_PORT:-8088}
       - MODULE_TWITTER_PORT=${MODULE_TWITTER_PORT:-8089}
@@ -113,6 +116,7 @@ services:
       - MODULE_SOUNDCLOUD_ENDPOINT=${MODULE_SOUNDCLOUD_ENDPOINT:-http://localhost:8084}
       - MODULE_YTMUSIC_ENDPOINT=${MODULE_YTMUSIC_ENDPOINT:-http://localhost:8085}
       - MODULE_SPOTIFY_ENDPOINT=${MODULE_SPOTIFY_ENDPOINT:-http://localhost:8086}
+      - MODULE_APPLE_MUSIC_ENDPOINT=${MODULE_APPLE_MUSIC_ENDPOINT:-http://localhost:8091}
       - MODULE_DEEZER_ENDPOINT=${MODULE_DEEZER_ENDPOINT:-http://localhost:8087}
       - MODULE_THREADS_ENDPOINT=${MODULE_THREADS_ENDPOINT:-http://localhost:8088}
       - MODULE_TWITTER_ENDPOINT=${MODULE_TWITTER_ENDPOINT:-http://localhost:8089}
@@ -229,6 +233,23 @@ services:
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+    restart: always
+
+  apple_music:
+    image: ${APPLE_MUSIC_IMAGE:-ghcr.io/pinchana/pinchana-api/apple-music:latest}
+    container_name: ${APPLE_MUSIC_CONTAINER_NAME:-pinchana-apple-music}
+    network_mode: container:${GLUETUN_CONTAINER_NAME:-gluetun}
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - scraper-cache:/app/cache
+    environment:
+      - CACHE_PATH=/app/cache
+      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
+      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
+      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
+      - SOCIALCRAWL_API_KEY=${SOCIALCRAWL_API_KEY:-}
     restart: always
 
   deezer:

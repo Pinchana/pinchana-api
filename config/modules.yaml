@@ -173,3 +173,21 @@ modules:
       env:
         CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
         COUB_FFMPEG_TIMEOUT_SECONDS: "${COUB_FFMPEG_TIMEOUT_SECONDS:-300}"
+
+  apple_music:
+    enabled: true
+    route_patterns: ["music.apple.com"]
+    source:
+      type: local
+      path: /modules/pinchana-apple-music
+    container:
+      dockerfile: Dockerfile
+      port: "${MODULE_APPLE_MUSIC_PORT:-8091}"
+      endpoint: "${MODULE_APPLE_MUSIC_ENDPOINT:-http://localhost:8091}"
+      image_tag: "${MODULE_APPLE_MUSIC_IMAGE_TAG:-pinchana-module-apple-music}"
+      container_name: "${MODULE_APPLE_MUSIC_CONTAINER_NAME:-pinchana-apple-music}"
+      network: "${MODULE_NETWORK:-container:gluetun}"
+      cache_volume: "${MODULE_CACHE_VOLUME:-scraper-cache}"
+      env:
+        CACHE_MAX_SIZE_GB: "${CACHE_MAX_SIZE_GB:-10.0}"
+        SOCIALCRAWL_API_KEY: "${SOCIALCRAWL_API_KEY:-}"
