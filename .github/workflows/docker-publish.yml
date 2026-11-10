@@ -58,6 +58,10 @@ jobs:
         working-directory: pinchana-server
         run: uv run --with pytest pytest -q
 
+      - name: Test TikTok format selection and extraction
+        working-directory: pinchana-tiktok
+        run: uv run --with pytest --with pytest-asyncio python -m pytest -q
+
       - name: Test Apple Music tracks
         working-directory: pinchana-apple-music
         run: uv run --with pytest pytest -q
