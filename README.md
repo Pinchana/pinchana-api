@@ -298,3 +298,30 @@ Python dependencies and build backends were refreshed across all API packages,
 including the DLP requirements files. The Threads module's `pyee` version is
 limited by Playwright's declared `pyee<15` requirement. Refresh each package's
 lockfile with `uv lock --upgrade` and install it with `uv sync --frozen`.
+
+### Host cookies for full YouTube video sessions
+
+DLP accepts full YouTube video URLs only. Apple Music, Spotify, YouTube Music,
+Shorts and playlist pages remain on their own service routes. Starting Compose
+with `--profile dlp` also starts the base scraper services; their presence in the
+container list does not route their traffic through DLP.
+
+To supply optional operator cookies, put a Netscape cookie file at
+`<DLP_HOST_COOKIES_DIR>/youtube.txt`. The default directory is
+`./secrets/dlp-cookies`, which is ignored by Git. The DLP API mounts it read-only
+at `/run/host-cookies`, runs as UID/GID 10001, and must be able to read the file:
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 700 secrets/dlp-cookies
+sudo install -o 10001 -g 10001 -m 600 /path/to/cookies.txt secrets/dlp-cookies/youtube.txt
+```
+
+Host cookies are optional. Without the file, downloads remain anonymous unless
+the client submits user cookies. For each submission without `cookiesEnc`, the
+DLP API encrypts host cookies for the allocated worker before queuing anything
+in Redis. User cookies always take priority. Send `useHostCookies: false` in a
+job submission to disable the host fallback for that session. Host cookies are
+never returned to clients. The worker's existing temporary-cookie cleanup also
+applies to these envelopes. Restart/recreate `dlp-api` after changing the mount
+configuration; replacing `youtube.txt` within the directory is read on the next
+submission.

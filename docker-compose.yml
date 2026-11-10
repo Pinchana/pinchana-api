@@ -344,6 +344,7 @@ services:
     environment:
       - REDIS_URL=redis://:${DLP_REDIS_PASSWORD:-dlp-disabled-change-me}@dlp-redis:6379/0
       - JOBS_DIR=/data/jobs
+      - DLP_HOST_COOKIES_FILE=/run/host-cookies/youtube.txt
       - DLP_GATEWAY_TOKEN=${DLP_GATEWAY_TOKEN:-dlp-disabled-change-me}
       - JOB_TTL_SECONDS=${DLP_JOB_TTL_SECONDS:-7200}
       - KEY_TTL_SECONDS=${DLP_KEY_TTL_SECONDS:-300}
@@ -353,6 +354,7 @@ services:
       - DLP_DOH_URL=${DLP_DOH_URL:-https://cloudflare-dns.com/dns-query}
       - DLP_DOH_PROXY_URL=http://dlp-vpn:8888
     volumes:
+      - ${DLP_HOST_COOKIES_DIR:-./secrets/dlp-cookies}:/run/host-cookies:ro
       - ${DLP_HOST_JOBS_DIR:-/tmp/pinchana-dlp-jobs}:/data/jobs:ro
     depends_on:
       dlp-redis:
