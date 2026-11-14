@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from pinchana_server import main
-from pinchana_server.cache_admin import clear_media_cache, resolve_cache_target
+from pinchana_server.cache_admin import clear_media_cache, report_media_cache_sweep, resolve_cache_target
 
 
 def post(root, shortcode):
@@ -62,6 +63,38 @@ def test_clear_never_follows_symlinks(tmp_path):
     assert clear_media_cache(root, None).deleted_posts == 1
     assert secret.read_bytes() == b"secret"
     assert (root / "ALIAS").is_symlink()
+
+
+def test_sweep_estimates_oldest_first_without_changing_cache(tmp_path):
+    old = post(tmp_path, "old")
+    new = post(tmp_path, "new")
+    (new / "video.mp4").write_bytes(b"n" * 40)
+    os.utime(old / "video.mp4", (1, 1))
+    (new / "alias.mp4").symlink_to(old / "video.mp4")
+    (tmp_path / "alias").symlink_to(old, target_is_directory=True)
+    unfinished = tmp_path / "unfinished"
+    unfinished.mkdir()
+    (unfinished / "video.mp4").write_bytes(b"partial")
+    (unfinished / "metadata.json").symlink_to(old / "metadata.json")
+    transient = tmp_path / ".transient"
+    transient.mkdir()
+    post(transient, "transient")
+    (tmp_path / "sessions.db").write_bytes(b"sqlite")
+    before = {path.relative_to(tmp_path) for path in tmp_path.rglob("*")}
+
+    result = report_media_cache_sweep(tmp_path, 50)
+    assert result.model_dump() == {
+        "limit_bytes": 50,
+        "completed_posts": 2,
+        "completed_bytes": 56,
+        "over_limit_bytes": 6,
+        "reclaimable_posts": 1,
+        "reclaimable_bytes": 14,
+    }
+    assert report_media_cache_sweep(tmp_path, 56).reclaimable_posts == 0
+    assert report_media_cache_sweep(tmp_path, 10).reclaimable_posts == 2
+    assert {path.relative_to(tmp_path) for path in tmp_path.rglob("*")} == before
+    assert (old / "video.mp4").read_bytes() == b"cached video"
 
 
 @pytest.mark.parametrize("target", ["..", ".", "../ABC", "/tmp", "ABC/def", "a\\b", "", "a" * 129])
@@ -216,3 +249,28 @@ def test_endpoint_authentication_and_client_allowlist(tmp_path, monkeypatch, key
         assert response.json() == {"shortcode": "ABC", "deleted_posts": 1, "freed_bytes": 14}
     else:
         assert "error" in response.json()
+
+
+def test_sweep_endpoint_is_admin_only_and_read_only(tmp_path, monkeypatch):
+    folder = post(tmp_path, "ABC")
+    monkeypatch.setenv("PINCHANA_API_KEYS", json.dumps({"bot": "bot-key", "public": "public-key"}))
+    monkeypatch.setenv("PINCHANA_CACHE_ADMIN_CLIENTS", "bot")
+    monkeypatch.setattr(main.storage, "_base_path", tmp_path)
+    monkeypatch.setattr(main.storage, "max_size_bytes", 10)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            url = "/v1/admin/cache/sweep"
+            assert (await client.get(url)).status_code == 401
+            assert (await client.get(url, headers={"X-API-Key": "public-key"})).status_code == 403
+            headers = {"X-API-Key": "bot-key"}
+            assert (await client.post(url, headers=headers)).status_code == 405
+            with main.cache_sweep_lock:
+                assert (await client.get(url, headers=headers)).status_code == 429
+            response = await client.get(url, headers=headers)
+            assert response.status_code == 200
+            assert response.headers["Cache-Control"] == "no-store"
+            assert response.json()["reclaimable_bytes"] == 14
+
+    asyncio.run(run())
+    assert folder.is_dir()

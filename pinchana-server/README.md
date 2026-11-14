@@ -175,6 +175,19 @@ The root, databases, session files and unrelated service directories are retaine
 symlinks are never followed. This is invalidation, not a download pause: active
 requests may repopulate an entry after it is cleared.
 
+### `GET /v1/admin/cache/sweep`
+
+Read-only estimate of what a size-based sweep would reclaim. Uses the same API
+key and client allowlist as cache clear. Returns the configured `limit_bytes`,
+`completed_posts`, `completed_bytes`, `over_limit_bytes`, and the estimated
+`reclaimable_posts` and `reclaimable_bytes` needed to reach the limit. The
+estimate orders completed posts by their oldest file modification time.
+
+The report counts regular files in post directories with a regular
+`metadata.json` completion marker. Transient scopes, service state, and symlinks
+are outside the estimate. The scan runs on demand and never changes cache
+contents. If a scan is already running, the endpoint returns `429`.
+
 ### `POST /admin/vpn/rotate`
 Triggers an immediate VPN IP rotation.
 

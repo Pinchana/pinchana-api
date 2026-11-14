@@ -1,9 +1,10 @@
-"""Owner-requested media cache invalidation; never scrape or download a post."""
+"""Owner-requested media cache inspection and invalidation."""
 
 import asyncio
 import os
 import re
 import shutil
+import stat
 from pathlib import Path
 from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
@@ -34,6 +35,15 @@ class CacheClearResponse(BaseModel):
     shortcode: str | None
     deleted_posts: int = Field(ge=0)
     freed_bytes: int = Field(ge=0)
+
+
+class CacheSweepReport(BaseModel):
+    limit_bytes: int = Field(ge=0)
+    completed_posts: int = Field(ge=0)
+    completed_bytes: int = Field(ge=0)
+    over_limit_bytes: int = Field(ge=0)
+    reclaimable_posts: int = Field(ge=0)
+    reclaimable_bytes: int = Field(ge=0)
 
 
 def _validated_url(url: str, platform: str | None = None) -> tuple[str, str]:
@@ -188,3 +198,60 @@ def clear_media_cache(root: Path, shortcode: str | None) -> CacheClearResponse:
             deleted += 1
             freed += size
     return CacheClearResponse(shortcode=shortcode, deleted_posts=deleted, freed_bytes=freed)
+
+
+def report_media_cache_sweep(root: Path, limit_bytes: int) -> CacheSweepReport:
+    """Estimate how much an oldest-first sweep of completed posts could reclaim."""
+    root = root.resolve()
+    if root == Path(root.anchor):
+        raise ValueError("Refusing to scan a filesystem root")
+
+    def on_walk_error(error: OSError) -> None:
+        if not isinstance(error, FileNotFoundError):
+            raise error
+
+    posts: list[tuple[int, str, int]] = []
+    if root.is_dir():
+        for entry in root.iterdir():
+            if not SHORTCODE.fullmatch(entry.name) or entry.is_symlink() or not entry.is_dir():
+                continue
+            metadata = entry / "metadata.json"
+            try:
+                marker = metadata.lstat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISREG(marker.st_mode):
+                continue
+
+            oldest_mtime = marker.st_mtime_ns
+            size = 0
+            for directory, _, files in entry.walk(on_error=on_walk_error):
+                for filename in files:
+                    try:
+                        info = (directory / filename).lstat()
+                    except FileNotFoundError:
+                        continue  # A concurrent eviction removed the file.
+                    if stat.S_ISREG(info.st_mode):
+                        size += info.st_size
+                        oldest_mtime = min(oldest_mtime, info.st_mtime_ns)
+            if size:
+                posts.append((oldest_mtime, entry.name, size))
+
+    completed_bytes = sum(size for _, _, size in posts)
+    over_limit = max(0, completed_bytes - limit_bytes)
+    reclaimable_posts = reclaimable_bytes = 0
+    if over_limit:
+        for _, _, size in sorted(posts):
+            reclaimable_posts += 1
+            reclaimable_bytes += size
+            if reclaimable_bytes >= over_limit:
+                break
+
+    return CacheSweepReport(
+        limit_bytes=limit_bytes,
+        completed_posts=len(posts),
+        completed_bytes=completed_bytes,
+        over_limit_bytes=over_limit,
+        reclaimable_posts=reclaimable_posts,
+        reclaimable_bytes=reclaimable_bytes,
+    )

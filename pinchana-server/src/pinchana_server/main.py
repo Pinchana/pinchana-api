@@ -16,6 +16,7 @@ import time
 import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
+from threading import Lock
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -32,7 +33,14 @@ from pinchana_core.storage import MediaStorage
 from pinchana_core.video_metadata import duration_seconds
 from pinchana_core.vpn import GluetunController, VpnRotationError
 
-from .cache_admin import CacheClearRequest, CacheClearResponse, clear_media_cache, resolve_cache_target
+from .cache_admin import (
+    CacheClearRequest,
+    CacheClearResponse,
+    CacheSweepReport,
+    clear_media_cache,
+    report_media_cache_sweep,
+    resolve_cache_target,
+)
 from .media_probe import MediaDimensionProbe
 from .gif_conversion import (
     GIF_MAX_INPUT_BYTES,
@@ -84,6 +92,7 @@ storage = MediaStorage(
     max_size_gb=float(os.getenv("CACHE_MAX_SIZE_GB", "10.0")),
 )
 dimension_probe = MediaDimensionProbe(storage.base_path)
+cache_sweep_lock = Lock()
 
 forward_client: httpx.AsyncClient | None = None
 playlist_jobs = PlaylistJobs()
@@ -1896,18 +1905,38 @@ async def health_check():
 # ---------------------------------------------------------------------------
 # Admin routes
 # ---------------------------------------------------------------------------
-@app.post("/v1/admin/cache/clear", response_model=CacheClearResponse)
-async def admin_clear_cache(
-    request: CacheClearRequest,
-    client_name: str = Depends(_require_api_key),
-):
+def _require_cache_admin(client_name: str = Depends(_require_api_key)) -> str:
     allowed = {
         name.strip()
         for name in os.getenv("PINCHANA_CACHE_ADMIN_CLIENTS", "bot,telegram-bot").split(",")
         if name.strip()
     }
     if client_name not in allowed:
-        raise HTTPException(403, "This client cannot clear the media cache")
+        raise HTTPException(403, "This client cannot administer the media cache")
+    return client_name
+
+
+@app.get("/v1/admin/cache/sweep", response_model=CacheSweepReport)
+def admin_cache_sweep(response: Response, client_name: str = Depends(_require_cache_admin)):
+    """Report how much disk space a sweep of completed posts would reclaim."""
+    if not cache_sweep_lock.acquire(blocking=False):
+        raise HTTPException(429, "A media cache sweep report is already running")
+    try:
+        result = report_media_cache_sweep(storage.base_path, storage.max_size_bytes)
+    except (OSError, ValueError) as exc:
+        logger.exception("cache_sweep_report_failed client=%s", client_name)
+        raise HTTPException(503, "Media cache could not be scanned") from exc
+    finally:
+        cache_sweep_lock.release()
+    response.headers["Cache-Control"] = "no-store"
+    return result
+
+
+@app.post("/v1/admin/cache/clear", response_model=CacheClearResponse)
+async def admin_clear_cache(
+    request: CacheClearRequest,
+    client_name: str = Depends(_require_cache_admin),
+):
     try:
         shortcode = await resolve_cache_target(request.target, forward_client)
         result = await asyncio.to_thread(clear_media_cache, storage.base_path, shortcode)
