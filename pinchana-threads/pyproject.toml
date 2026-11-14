@@ -1,0 +1,31 @@
+[project]
+name = "pinchana-threads"
+version = "26.11.7"
+description = "Threads (Meta) scraper plugin for Pinchana"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pinchana-core",
+    # 0.6.5 is the last wrapper with upstream support for keyless Chromium.
+    "cloakbrowser==0.6.5",
+    "curl-cffi>=0.17.0",
+    "fastapi>=0.162.2",
+    "httpx>=0.28.1",
+    "pydantic>=2.14.3",
+    "python-dotenv>=1.2.4",
+    "tenacity>=9.2.1",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+]
+
+[tool.uv.sources]
+pinchana-core = { path = "../pinchana-core" }
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"

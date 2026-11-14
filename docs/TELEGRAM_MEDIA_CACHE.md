@@ -29,5 +29,5 @@ The files may briefly exist on disk while the first Telegram upload is in
 progress. This is a transient processing workspace, not a persistent media
 cache; ordinary API clients remain unaffected.
 
-Deploy `pinchana-core` and `pinchana-server` together with their new submodule
-pins before enabling the bot's `TELEGRAM_CACHE_CHAT_ID`.
+Deploy an API release containing both the `pinchana-core` and `pinchana-server`
+changes before enabling the bot's `TELEGRAM_CACHE_CHAT_ID`.

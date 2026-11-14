@@ -4,7 +4,7 @@ The DLP stack is deployed in two phases. Infrastructure is brought up while the 
 
 ## 1. Publish immutable artifacts
 
-Publish the `pinchana-dlp` and `pinchana-server` commits first, then commit and publish their pointers from `pinchana-api`. Publish the web application separately. Do not point the parent repository at submodule commits that are not reachable from their public remotes.
+Release the `pinchana-dlp` and `pinchana-server` changes together from `pinchana-api`. Publish the web application separately.
 
 Use the Docker publishing workflow to create all three DLP images. On the production host, update the APIs and DLP images as one coherent release and atomically replace their `.env` values with immutable repository digests:
 

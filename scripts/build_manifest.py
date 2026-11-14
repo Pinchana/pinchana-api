@@ -12,7 +12,6 @@ NAME_OVERRIDES = {
     "pinchana-inst": "instagram",
     "pinchana-server": "gateway",
 }
-PARENT_MODULES = {"bluesky": "pinchana-bluesky"}
 
 
 def git(*arguments: str) -> str:
@@ -26,19 +25,14 @@ def manifest() -> dict[str, dict[str, str]]:
             "repository": REPOSITORY,
         }
     }
-    entries = git("config", "--file", ".gitmodules", "--get-regexp", "^submodule\\..*\\.path$")
-    for entry in entries.splitlines():
-        key, path = entry.split(maxsplit=1)
-        section = key.removesuffix(".path")
-        repository = git("config", "--file", ".gitmodules", "--get", f"{section}.url").removesuffix(".git")
+    for path in git("ls-tree", "-d", "--name-only", "HEAD").splitlines():
+        if not path.startswith("pinchana-"):
+            continue
         name = NAME_OVERRIDES.get(path, path.removeprefix("pinchana-"))
         result[name] = {
-            "commit": git("rev-parse", f"HEAD:{path}"),
-            "repository": repository,
+            "commit": git("log", "-1", "--format=%H", "HEAD", "--", path),
+            "repository": REPOSITORY,
         }
-    for name, path in PARENT_MODULES.items():
-        if commit := git("log", "-1", "--format=%H", "--", path):
-            result[name] = {"commit": commit, "repository": REPOSITORY}
     return result
 
 

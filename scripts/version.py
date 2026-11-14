@@ -4,11 +4,10 @@
 VERSION uses YY.MM.ITERATION and is the source of truth for releases and
 Docker images. Python package metadata uses the equivalent PEP 440 spelling.
 
-By default, `set` and `bump` are release operations: they synchronize all git
-submodules, refresh package versions and uv.lock files, commit and push each
-submodule, then commit and push the parent repository. Use --local-only to keep
-the old file-only behavior. Add --publish to also create/push the matching tag
-and publish a GitHub Release through gh.
+By default, `set` and `bump` refresh package versions and uv.lock files, then
+commit and push the version update. Use --local-only to edit files locally.
+Add --publish to create and push the matching tag and publish a GitHub Release
+through gh.
 """
 
 from __future__ import annotations
@@ -47,22 +46,15 @@ class Version:
         return f"{self.year}.{self.month}.{self.iteration}"
 
 
-@dataclass(frozen=True)
-class SubmoduleState:
-    path: Path
-    branch: str
-
-
 def run(
     command: list[str],
     *,
-    cwd: Path = ROOT,
     capture: bool = False,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
-        cwd=cwd,
+        cwd=ROOT,
         check=check,
         text=True,
         stdout=subprocess.PIPE if capture else None,
@@ -70,21 +62,16 @@ def run(
     )
 
 
-def output(command: list[str], *, cwd: Path = ROOT) -> str:
-    return run(command, cwd=cwd, capture=True).stdout.strip()
-
-
 def git(
     *args: str,
-    cwd: Path = ROOT,
     capture: bool = False,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    return run(["git", *args], cwd=cwd, capture=capture, check=check)
+    return run(["git", *args], capture=capture, check=check)
 
 
-def git_output(*args: str, cwd: Path = ROOT) -> str:
-    return output(["git", *args], cwd=cwd)
+def git_output(*args: str) -> str:
+    return git(*args, capture=True).stdout.strip()
 
 
 def require_tool(name: str) -> None:
@@ -146,24 +133,6 @@ def project_files() -> list[Path]:
     return sorted(ROOT.glob("pinchana-*/pyproject.toml"))
 
 
-def submodule_paths() -> list[Path]:
-    result = git(
-        "config",
-        "--file",
-        ".gitmodules",
-        "--get-regexp",
-        r"^submodule\..*\.path$",
-        capture=True,
-    )
-    paths: list[Path] = []
-    for line in result.stdout.splitlines():
-        _, path = line.split(None, 1)
-        paths.append(ROOT / path.strip())
-    if not paths:
-        raise RuntimeError("no git submodules configured")
-    return paths
-
-
 def project_metadata(path: Path) -> tuple[str, str]:
     project = tomllib.loads(path.read_text(encoding="utf-8"))["project"]
     return project["name"], project["version"]
@@ -178,7 +147,7 @@ def validate(version: Version, tag: str | None = None) -> list[str]:
 
     projects = project_files()
     if not projects:
-        errors.append("no Python submodule projects found")
+        errors.append("no Python projects found")
 
     for path in projects:
         relative = path.relative_to(ROOT)
@@ -238,161 +207,40 @@ def set_version(version: Version) -> None:
     require_tool("uv")
     projects = project_files()
     if not projects:
-        raise RuntimeError("no Python submodule projects found")
+        raise RuntimeError("no Python projects found")
 
     VERSION_FILE.write_text(f"{version.value}\n", encoding="utf-8")
     for path in projects:
         replace_project_version(path, version.pep440)
     for path in projects:
-        run(
-            ["uv", "lock", "--directory", str(path.parent), "--no-progress"],
-            cwd=ROOT,
-        )
+        run(["uv", "lock", "--directory", str(path.parent), "--no-progress"])
 
 
 def docker_tags(version: Version) -> list[str]:
     return [version.value, f"{version.year:02d}.{version.month:02d}", "stable"]
 
 
-def ensure_root_clean() -> None:
-    status = git_output(
-        "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=all"
-    )
-    if status:
-        raise RuntimeError(
-            "parent worktree has uncommitted non-submodule changes; commit or stash first"
-        )
+def ensure_clean() -> None:
+    if git_output("status", "--porcelain", "--untracked-files=normal"):
+        raise RuntimeError("worktree has uncommitted changes; commit or stash first")
 
 
-def ensure_submodule_clean(path: Path) -> None:
-    status = git_output("status", "--porcelain", cwd=path)
-    if status:
-        raise RuntimeError(
-            f"submodule {path.relative_to(ROOT)} has uncommitted changes; "
-            "commit or stash them first"
-        )
-
-
-def remote_default_branch(path: Path) -> str:
-    symbolic = git(
-        "symbolic-ref",
-        "--quiet",
-        "--short",
-        "refs/remotes/origin/HEAD",
-        cwd=path,
-        capture=True,
-        check=False,
-    )
-    if symbolic.returncode == 0 and symbolic.stdout.strip():
-        return symbolic.stdout.strip().removeprefix("origin/")
-
-    for candidate in ("main", "master"):
-        probe = git(
-            "show-ref",
-            "--verify",
-            "--quiet",
-            f"refs/remotes/origin/{candidate}",
-            cwd=path,
-            check=False,
-        )
-        if probe.returncode == 0:
-            return candidate
-    raise RuntimeError(
-        f"cannot determine default remote branch for {path.relative_to(ROOT)}"
-    )
-
-
-def is_ancestor(path: Path, older: str, newer: str) -> bool:
-    result = git(
-        "merge-base", "--is-ancestor", older, newer, cwd=path, check=False
-    )
-    return result.returncode == 0
-
-
-def synchronize_submodules() -> list[SubmoduleState]:
-    """Initialize submodules and move stale pins to remote heads safely.
-
-    A pinned commit behind origin/<default> is fast-forwarded to the remote head.
-    A pinned commit ahead of the remote is kept so the release push can publish
-    it. Divergent histories are rejected instead of being rewritten.
-    """
-    require_tool("git")
-    ensure_root_clean()
-    git("submodule", "sync", "--recursive")
-    git("submodule", "update", "--init", "--recursive")
-
-    states: list[SubmoduleState] = []
-    for path in submodule_paths():
-        ensure_submodule_clean(path)
-        git("fetch", "origin", "--prune", cwd=path)
-        branch = remote_default_branch(path)
-        local_head = git_output("rev-parse", "HEAD", cwd=path)
-        remote_ref = f"origin/{branch}"
-        remote_head = git_output("rev-parse", remote_ref, cwd=path)
-
-        if local_head != remote_head:
-            if is_ancestor(path, local_head, remote_head):
-                git("checkout", "--detach", remote_ref, cwd=path)
-            elif not is_ancestor(path, remote_head, local_head):
-                raise RuntimeError(
-                    f"submodule {path.relative_to(ROOT)} diverged from {remote_ref}; "
-                    "resolve it manually before releasing"
-                )
-
-        states.append(SubmoduleState(path=path, branch=branch))
-    return states
-
-
-def has_staged_changes(path: Path) -> bool:
-    result = git("diff", "--cached", "--quiet", cwd=path, check=False)
-    return result.returncode != 0
-
-
-def commit_submodule_versions(version: Version) -> None:
-    message = f"release: {version.value}"
-    submodules = set(submodule_paths())
-    for project_path in project_files():
-        path = project_path.parent
-        if path not in submodules:
-            continue  # Parent-owned packages are committed with the parent.
-        git("add", "pyproject.toml", "uv.lock", cwd=path)
-        if has_staged_changes(path):
-            git("commit", "-m", message, cwd=path)
-
-
-def push_submodules(states: list[SubmoduleState]) -> None:
-    for state in states:
-        ensure_submodule_clean(state.path)
-        git(
-            "push",
-            "origin",
-            f"HEAD:refs/heads/{state.branch}",
-            cwd=state.path,
-        )
-
-
-def root_branch() -> str:
+def current_branch() -> str:
     branch = git_output("branch", "--show-current")
     if not branch:
-        raise RuntimeError("parent repository must be on a branch")
+        raise RuntimeError("release updates require a checked-out branch")
     return branch
 
 
-def commit_and_push_parent(version: Version, states: list[SubmoduleState]) -> None:
-    branch = root_branch()
-    relative_paths = [str(state.path.relative_to(ROOT)) for state in states]
-    submodules = set(submodule_paths())
-    for project in project_files():
-        if project.parent not in submodules:
-            relative_paths.extend(str(path.relative_to(ROOT)) for path in (
-                project, project.with_name("uv.lock"),
-            ))
-    git("add", "VERSION", *relative_paths)
-    if not has_staged_changes(ROOT):
-        raise RuntimeError(
-            f"release {version.value} produced no parent changes; "
-            "the version may already be fully synchronized"
-        )
+def commit_and_push_version(version: Version, branch: str) -> None:
+    paths = [
+        str(path.relative_to(ROOT))
+        for project in project_files()
+        for path in (project, project.with_name("uv.lock"))
+    ]
+    git("add", "--", "VERSION", *paths)
+    if not git_output("diff", "--cached", "--name-only"):
+        raise RuntimeError(f"release {version.value} produced no version changes")
     git("commit", "-m", f"release: {version.value}")
     git("push", "origin", f"HEAD:refs/heads/{branch}")
 
@@ -431,20 +279,16 @@ def publish_release(version: Version, args: argparse.Namespace) -> None:
 
 
 def perform_release_update(version: Version, args: argparse.Namespace) -> None:
-    states = synchronize_submodules()
+    require_tool("git")
+    ensure_clean()
+    branch = current_branch()
     set_version(version)
     errors = validate(version)
     if errors:
         raise RuntimeError("\n".join(errors))
 
-    commit_submodule_versions(version)
-    push_submodules(states)
-    commit_and_push_parent(version, states)
-
-    print(
-        f"released version metadata {version.value} (Python {version.pep440}); "
-        "submodules and parent were pushed"
-    )
+    commit_and_push_version(version, branch)
+    print(f"pushed version {version.value} (Python {version.pep440}) to origin/{branch}")
     if args.publish:
         publish_release(version, args)
 
@@ -453,12 +297,12 @@ def add_release_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--local-only",
         action="store_true",
-        help="only edit VERSION/package metadata/lockfiles; do not sync, commit, or push",
+        help="edit VERSION, package metadata, and lockfiles locally",
     )
     parser.add_argument(
         "--publish",
         action="store_true",
-        help="after pushing version commits, create the tag and publish a GitHub Release",
+        help="after pushing the version commit, create the tag and publish a GitHub Release",
     )
     parser.add_argument("--release-title", help="GitHub Release title")
     notes = parser.add_mutually_exclusive_group()
@@ -486,13 +330,13 @@ def main() -> int:
     check_parser.add_argument("--tag", help="also require an exact v-prefixed release tag")
 
     set_parser = subparsers.add_parser(
-        "set", help="set a version, synchronize submodules, commit, and push"
+        "set", help="set a version, commit, and push"
     )
     set_parser.add_argument("version")
     add_release_options(set_parser)
 
     bump_parser = subparsers.add_parser(
-        "bump", help="advance the monthly iteration, synchronize, commit, and push"
+        "bump", help="advance the monthly iteration, commit, and push"
     )
     add_release_options(bump_parser)
 

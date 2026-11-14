@@ -2,13 +2,13 @@
 
 ## Project Structure & Module Organization
 
-This is a Docker Compose orchestration repo for the Pinchana scraping gateway. The root is not a Python package and has no root task runner. Scrapers are separate Python packages, mostly Git submodules, and the gateway image installs them at build time. `pinchana-core` is shared by the scraper packages.
+This repository contains the Pinchana scraping gateway, its scraper packages, and Docker Compose configuration. Each Python package lives in its own top-level directory. The gateway image installs the scraper packages at build time. `pinchana-core` is shared by the scraper packages.
 
 The gateway listens on `8080`. Gluetun's control port is `8000`. DLP uses its dedicated internal network.
 
 ## Build, Test, and Development Commands
 
-Work inside a submodule for Python development:
+Run Python development commands from the package directory:
 
 ```bash
 cd pinchana-<name>
@@ -47,7 +47,7 @@ For other modules, verify by importing the package or running the service locall
 
 `.github/workflows/docker-publish.yml` builds GHCR images at `ghcr.io/pinchana/pinchana-api/<service>`. `VERSION` is the rolling product CalVer source of truth in `YY.MM.ITERATION` form.
 
-`python scripts/version.py bump` is the normal release-version operation. It initializes and synchronizes all submodules, safely fast-forwards stale submodule pins to their remote default branches, updates Python package metadata and `uv.lock` files, commits and pushes the affected submodules, then commits and pushes `VERSION` plus the new parent submodule pointers. `python scripts/version.py set YY.MM.N` does the same for an explicit version. Use `--local-only` only when a metadata-only edit without git commits/pushes is explicitly required.
+`python scripts/version.py bump` updates `VERSION`, Python package metadata, and `uv.lock` files in one commit and pushes the current branch. `python scripts/version.py set YY.MM.N` does the same for an explicit version. Use `--local-only` to edit the files locally.
 
 To publish in the same operation, use `python scripts/version.py bump --publish -n "release description"` or `-F RELEASE_NOTES.md`. This creates the matching annotated tag and delegates to `scripts/publish_release.py`, which pushes the tag and creates the GitHub Release through `gh`. If the matching tag was already created locally, run `python scripts/publish_release.py -n "release description"` instead. See `docs/RELEASING.md` for the full procedure and safety checks.
 
@@ -65,4 +65,4 @@ docker compose up -d --force-recreate gluetun
 
 ## Commit & Pull Request Guidelines
 
-History uses short imperative or conventional-style messages such as `fix: ...`, `feat: ...`, and `Prepare 0.2 beta release`. For submodule changes, commit and push inside the submodule first, then commit the updated submodule pointer in the root repo. The release scripts automate this ordering for version releases. PRs should describe affected services, runtime/config changes, and verification commands.
+History uses short imperative or conventional-style messages such as `fix: ...`, `feat: ...`, and `Prepare 0.2 beta release`. Commit package changes directly in this repository. PRs should describe affected services, runtime/config changes, and verification commands.

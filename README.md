@@ -40,21 +40,28 @@ Compose keeps it in the `threads-browser` volume across upgrades.
 
 ## Repository layout
 
-The top-level repository defines Compose, release tooling, and parent-owned
-packages including Bluesky and Apple Music. Other scrapers live in independent
-Git submodules. Each Python package has its own `pyproject.toml`, `uv.lock`, and
-source directory. The gateway locks and installs those packages together.
+The repository contains Compose configuration, release tooling, and the
+`pinchana-*` module directories. Each Python package has its own
+`pyproject.toml`, `uv.lock`, and source directory. The gateway locks and
+installs those packages together.
 
 `pinchana-core` contains shared models, storage, music helpers, and Gluetun
 control logic.
 
 ## Quick start
 
-Clone with submodules:
+```bash
+git clone https://github.com/Pinchana/pinchana-api.git
+cd pinchana-api
+```
+
+If you already have a checkout with initialized submodules, save any module
+changes and back up local files inside those directories that you need to keep.
+Run these commands before pulling the migration:
 
 ```bash
-git clone --recurse-submodules https://github.com/Pinchana/pinchana-api.git
-cd pinchana-api
+git submodule deinit --all
+git -c submodule.recurse=false pull --ff-only
 ```
 
 Create configuration:
@@ -249,7 +256,7 @@ ghcr.io/pinchana/pinchana-api/<server|dlp-api|dlp-orchestrator|dlp-worker>:<tag>
 strict CalVer in `YY.MM.ITERATION` form. Releases within a month increment the
 last number (`26.08.1`, `26.08.2`); the first release of a new month resets it to
 `1`. The version tool calculates that transition, converts the result to PEP 440,
-and keeps every Python submodule manifest and lockfile synchronized:
+and keeps every Python package manifest and lockfile synchronized:
 
 ```bash
 python scripts/version.py check
@@ -257,10 +264,9 @@ python scripts/version.py next
 python scripts/version.py bump
 ```
 
-Because the Python projects are separate Git submodules, commit and push their
-generated `pyproject.toml` and `uv.lock` changes first. Then commit their updated
-pointers together with `VERSION` in this repository. After the main build is
-green, create an annotated tag matching `VERSION` exactly:
+`bump` commits the package metadata and lockfiles together with `VERSION` and
+pushes the current branch. After the main build is green, create an annotated
+tag matching `VERSION` exactly:
 
 ```bash
 git tag -a v26.08.1 -m "Release 26.08.1"

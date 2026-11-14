@@ -1,0 +1,615 @@
+"""Threads scraper plugin — mounts as a FastAPI router."""
+
+import asyncio
+import logging
+import os
+import re
+import time
+from collections import OrderedDict
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
+from urllib.parse import urlsplit
+
+import httpx
+from fastapi import APIRouter, HTTPException, FastAPI
+from fastapi.responses import FileResponse
+from pinchana_core.models import ScrapeRequest, ScrapeResponse, MediaItem
+from pinchana_core.storage import MediaStorage
+from pinchana_core.vpn import GluetunController, VpnRotationError
+from pinchana_core.plugins import ScraperPlugin, registry
+from .scraper import ThreadsScraper, RateLimitError, NotFoundError
+
+
+class ThreadsScrapeResponse(ScrapeResponse):
+    """Extended response for Threads including link preview and engagement."""
+    link: Optional[str] = None
+    username: Optional[str] = None
+    author_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    like_count: Optional[int] = None
+    reply_count: Optional[int] = None
+    repost_count: Optional[int] = None
+    quote_count: Optional[int] = None
+    spoiler: bool = False
+    text_spoiler: bool = False
+    text_html: Optional[str] = None
+    taken_at: Optional[int] = None
+    music: Optional[dict] = None
+    quote: Optional[dict] = None
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+scraper = ThreadsScraper()
+gluetun = GluetunController()
+storage = MediaStorage(
+    base_path=os.getenv("CACHE_PATH", "./cache"),
+    max_size_gb=float(os.getenv("CACHE_MAX_SIZE_GB", "10.0")),
+)
+THREADS_CACHE_VERSION = 4
+
+
+class MediaDownloadError(RuntimeError):
+    pass
+
+
+class _InspectionCache:
+    def __init__(self, ttl: float = 300, max_entries: int = 256):
+        self.ttl = ttl
+        self.max_entries = max_entries
+        self.entries: OrderedDict[str, tuple[float, dict]] = OrderedDict()
+        self.lock = asyncio.Lock()
+
+    async def get(self, key: str) -> dict | None:
+        async with self.lock:
+            entry = self.entries.pop(key, None)
+            if not entry or time.monotonic() - entry[0] > self.ttl:
+                return None
+            self.entries[key] = entry
+            return entry[1]
+
+    async def put(self, key: str, value: dict) -> None:
+        async with self.lock:
+            self.entries.pop(key, None)
+            self.entries[key] = (time.monotonic(), value)
+            while len(self.entries) > self.max_entries:
+                self.entries.popitem(last=False)
+
+
+inspection_cache = _InspectionCache()
+
+
+def _media_url_to_path(url: str | None):
+    if not url:
+        return None
+    url = str(url)
+    if not url.startswith("/media/"):
+        return None
+    path_part = url.split("?", 1)[0][len("/media/"):]
+    parts = path_part.split("/", 2)
+    if len(parts) < 3:
+        return None
+    platform, post_id, filename = parts[0], parts[1], parts[2]
+    if platform != "threads" or not post_id or not filename:
+        return None
+    return storage.base_path / post_id / filename
+
+
+def _cached_media_ready(metadata: dict) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+    if metadata.get("_cache_version") != THREADS_CACHE_VERSION:
+        return False
+
+    urls: list[str] = []
+    payloads = [metadata]
+    if isinstance(metadata.get("quote"), dict):
+        payloads.append(metadata["quote"])
+    for payload in payloads:
+        _collect_media_urls(payload, urls)
+
+    for url in urls:
+        path = _media_url_to_path(url)
+        if not path or not path.is_file() or path.stat().st_size == 0:
+            return False
+
+    return True
+
+
+def _collect_media_urls(metadata: dict, urls: list[str]) -> None:
+    for key in ("thumbnail_url", "video_url", "audio_url", "cover_url"):
+        url = metadata.get(key)
+        if url:
+            urls.append(url)
+
+    carousel = metadata.get("carousel") or []
+    if isinstance(carousel, list):
+        for item in carousel:
+            if not isinstance(item, dict):
+                continue
+            for key in ("thumbnail_url", "video_url"):
+                url = item.get(key)
+                if url:
+                    urls.append(url)
+
+    music = metadata.get("music") or {}
+    if isinstance(music, dict):
+        for key in ("audio_url", "cover_url"):
+            url = music.get(key)
+            if url:
+                urls.append(url)
+
+
+
+def extract_post_id(url: str) -> str:
+    """Extract the Threads post shortcode from a URL.
+
+    Supports both /t/ and /post/ paths:
+      https://www.threads.com/t/ABC123
+      https://www.threads.com/@user/post/ABC123
+    """
+    match = re.search(r"/(?:t|post)/([^/?#&]+)", str(url))
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid Threads URL format.")
+    return match.group(1)
+
+
+async def resolve_post_id(
+    url: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> str:
+    """Resolve a Threads share alias and return its canonical post shortcode."""
+    try:
+        return extract_post_id(url)
+    except HTTPException as invalid_url:
+        parsed = urlsplit(url)
+        if (
+            parsed.hostname not in {"threads.com", "www.threads.com", "threads.net", "www.threads.net"}
+            or not re.fullmatch(r"/share/[^/]+/?", parsed.path)
+        ):
+            raise invalid_url
+
+    owns_client = client is None
+    if client is None:
+        client = httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=10,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+
+    try:
+        # Threads share aliases may return 200 to HEAD without exposing the
+        # canonical redirect. GET follows the same path browsers use.
+        response = await client.get(url)
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        status = 404 if exc.response.status_code == 404 else 503
+        raise HTTPException(
+            status_code=status,
+            detail="Threads share link could not be resolved.",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Threads share link resolution is temporarily unavailable.",
+        ) from exc
+    finally:
+        if owns_client:
+            await client.aclose()
+
+    canonical_url = str(response.url)
+    canonical_host = urlsplit(canonical_url).hostname
+    if canonical_host not in {
+        "threads.com",
+        "www.threads.com",
+        "threads.net",
+        "www.threads.net",
+    }:
+        raise HTTPException(status_code=400, detail="Invalid Threads share redirect.")
+    return extract_post_id(canonical_url)
+
+
+def _normalize_image_path(path):
+    """Rename an image to match its bytes when CDN content negotiation changes format."""
+    if not path.exists():
+        return path
+
+    with open(path, "rb") as image_file:
+        header = image_file.read(12)
+
+    if header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+        extension = ".webp"
+    elif header.startswith(b"\x89PNG\r\n\x1a\n"):
+        extension = ".png"
+    else:
+        extension = ".jpg"
+
+    if path.suffix == extension:
+        return path
+    normalized = path.with_suffix(extension)
+    path.replace(normalized)
+    return normalized
+
+
+async def _download_media(
+    post_id: str,
+    media_list: list[dict],
+    *,
+    filename_prefix: str = "",
+) -> list[MediaItem]:
+    """Download all media for a post and return MediaItem descriptors."""
+    # Main and quoted media share one post directory. Only the scrape entry
+    # point may clear an incomplete directory; doing it per media pass removes
+    # the main files before quote metadata is saved.
+    (storage.base_path / post_id).mkdir(parents=True, exist_ok=True)
+    tasks = []
+    mapping: list[tuple[int, str]] = []
+
+    for idx, item in enumerate(media_list):
+        media_url = item.get("url")
+        if not media_url:
+            continue
+        ext = "mp4" if item.get("type") == "video" else "jpg"
+        dest = storage.base_path / post_id / f"{filename_prefix}media_{idx}.{ext}"
+        tasks.append(storage.download(media_url, dest))
+        mapping.append((idx, ext))
+
+        thumbnail_url = item.get("thumbnail_url")
+        if ext == "mp4" and thumbnail_url:
+            thumbnail_dest = storage.base_path / post_id / f"{filename_prefix}media_{idx}.jpg"
+            tasks.append(storage.download(thumbnail_url, thumbnail_dest))
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for r in results:
+        if isinstance(r, Exception):
+            logger.error(f"Download error: {r}")
+
+    items = []
+    for idx, ext in mapping:
+        media_path = storage.base_path / post_id / f"{filename_prefix}media_{idx}.{ext}"
+        thumbnail_path = storage.base_path / post_id / f"{filename_prefix}media_{idx}.jpg"
+        if not media_path.exists():
+            continue
+        if ext == "jpg":
+            media_path = _normalize_image_path(media_path)
+            thumbnail_path = media_path
+        elif thumbnail_path.exists():
+            thumbnail_path = _normalize_image_path(thumbnail_path)
+        items.append(
+            MediaItem(
+                index=idx,
+                media_type="video" if ext == "mp4" else "image",
+                thumbnail_url=(
+                    f"/media/threads/{post_id}/{thumbnail_path.name}"
+                    if thumbnail_path.exists()
+                    else ""
+                ),
+                video_url=f"/media/threads/{post_id}/{filename_prefix}media_{idx}.mp4" if ext == "mp4" else None,
+            )
+        )
+    return items
+
+
+async def _run_ffmpeg_preview(
+    source: Path,
+    destination: Path,
+    *,
+    start_seconds: float,
+    duration_seconds: float,
+) -> bool:
+    process = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-y",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{start_seconds:.3f}",
+        "-i",
+        str(source),
+        "-t",
+        f"{duration_seconds:.3f}",
+        "-vn",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        str(destination),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await process.communicate()
+    if process.returncode != 0:
+        logger.warning(
+            "Threads music preview extraction failed: %s",
+            stderr.decode(errors="replace").strip(),
+        )
+        destination.unlink(missing_ok=True)
+        return False
+    return destination.is_file() and destination.stat().st_size > 0
+
+
+async def _download_music(
+    post_id: str,
+    music: dict | None,
+    *,
+    filename_prefix: str = "",
+) -> dict | None:
+    """Cache a 30-second Threads music preview and its artwork."""
+    if not isinstance(music, dict) or not music.get("source_url"):
+        return None
+
+    try:
+        start_seconds = max(0.0, float(music.get("start_time_ms") or 0) / 1000)
+        source_duration = music.get("source_duration_seconds")
+        remaining = (
+            max(0.0, float(source_duration) - start_seconds)
+            if source_duration is not None
+            else 30.0
+        )
+        clip_duration = min(30.0, remaining)
+    except (TypeError, ValueError):
+        start_seconds = 0.0
+        clip_duration = 30.0
+    if clip_duration <= 0:
+        return None
+
+    post_dir = storage.base_path / post_id
+    post_dir.mkdir(parents=True, exist_ok=True)
+    source_path = post_dir / f"{filename_prefix}music_source.mp4"
+    preview_path = post_dir / f"{filename_prefix}music_preview.m4a"
+    cover_path = post_dir / f"{filename_prefix}music_cover.jpg"
+
+    if not await storage.download(str(music["source_url"]), source_path):
+        return None
+    try:
+        if not await _run_ffmpeg_preview(
+            source_path,
+            preview_path,
+            start_seconds=start_seconds,
+            duration_seconds=clip_duration,
+        ):
+            return None
+    finally:
+        source_path.unlink(missing_ok=True)
+
+    cover_url = None
+    if music.get("artwork_url") and await storage.download(
+        str(music["artwork_url"]), cover_path
+    ):
+        cover_path = _normalize_image_path(cover_path)
+        cover_url = f"/media/threads/{post_id}/{cover_path.name}"
+
+    return {
+        "audio_url": f"/media/threads/{post_id}/{preview_path.name}",
+        "cover_url": cover_url,
+        "title": music.get("title"),
+        "artist": music.get("artist"),
+        "song_id": music.get("song_id"),
+        "duration_seconds": max(1, int(clip_duration)),
+        "start_time_seconds": int(start_seconds),
+    }
+
+
+async def _parsed_post(code: str) -> dict:
+    parsed = await inspection_cache.get(code)
+    if parsed is None:
+        parsed = await scraper.scrape_post(code)
+        await inspection_cache.put(code, parsed)
+    return parsed
+
+
+async def _response_from_parsed(
+    code: str,
+    parsed: dict,
+    *,
+    download_media: bool,
+    filename_prefix: str = "",
+) -> ThreadsScrapeResponse:
+    media_items = (
+        await _download_media(
+            code,
+            parsed.get("media") or [],
+            filename_prefix=filename_prefix,
+        )
+        if download_media
+        else []
+    )
+    expected_media = [item for item in (parsed.get("media") or []) if item.get("url")]
+    if download_media and len(media_items) != len(expected_media):
+        raise MediaDownloadError(
+            f"downloaded {len(media_items)} of {len(expected_media)} Threads media items"
+        )
+    music = (
+        await _download_music(
+            code,
+            parsed.get("music"),
+            filename_prefix=filename_prefix,
+        )
+        if download_media
+        else None
+    )
+
+    quote_parsed = parsed.get("quote")
+    quote = None
+    if isinstance(quote_parsed, dict):
+        quote = (
+            await _response_from_parsed(
+                code,
+                quote_parsed,
+                download_media=download_media,
+                filename_prefix="quote_",
+            )
+        ).model_dump(exclude={"quote"})
+        quote["source_url"] = quote_parsed.get("url")
+
+    return ThreadsScrapeResponse(
+        shortcode=str(parsed.get("code") or code),
+        caption=parsed.get("text") or "",
+        author=parsed.get("author_name") or parsed.get("username") or "",
+        media_type=("video" if any(m.media_type == "video" for m in media_items) else ("image" if media_items else "text")),
+        thumbnail_url=media_items[0].thumbnail_url if media_items else "",
+        video_url=media_items[0].video_url if media_items else None,
+        carousel=media_items if len(media_items) > 1 else None,
+        link=parsed.get("link"),
+        username=parsed.get("username"),
+        author_name=parsed.get("author_name"),
+        avatar_url=parsed.get("avatar_url"),
+        like_count=parsed.get("like_count"),
+        reply_count=parsed.get("reply_count"),
+        repost_count=parsed.get("repost_count"),
+        quote_count=parsed.get("quote_count"),
+        spoiler=bool(parsed.get("spoiler")),
+        text_spoiler=bool(parsed.get("text_spoiler")),
+        text_html=parsed.get("text_html"),
+        taken_at=parsed.get("taken_at"),
+        music=music,
+        quote=quote,
+    )
+
+
+async def _scrape_post(code: str) -> ThreadsScrapeResponse:
+    """Scrape a single Threads post by its URL shortcode."""
+    parsed = await _parsed_post(code)
+    storage.prepare_post_dir(code)
+    response = await _response_from_parsed(code, parsed, download_media=True)
+    metadata = response.model_dump()
+    metadata["_cache_version"] = THREADS_CACHE_VERSION
+    storage.save_metadata(code, metadata)
+    return response
+
+
+async def _inspect_post(code: str) -> ThreadsScrapeResponse:
+    parsed = await _parsed_post(code)
+    return await _response_from_parsed(code, parsed, download_media=False)
+
+
+async def _process_scrape_request(code: str):
+    if storage.is_cached(code):
+        cached = storage.load_metadata(code)
+        if cached and _cached_media_ready(cached):
+            logger.info("Cache hit for %s", code)
+            return ThreadsScrapeResponse(**cached)
+        logger.info("Cache invalid for %s, missing media; re-scraping", code)
+
+    logger.info("Scraping Threads post: %s", code)
+    last_error = None
+
+    for attempt in range(1, 4):
+        try:
+            return await _scrape_post(code)
+        except NotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except RateLimitError as e:
+            last_error = e
+            logger.warning(f"Attempt {attempt} rate-limited: {e}")
+            if attempt < 3:
+                try:
+                    await gluetun.rotate_ip()
+                except VpnRotationError as ve:
+                    logger.warning(f"VPN rotation failed: {ve}")
+                await asyncio.sleep(15)
+        except VpnRotationError as e:
+            last_error = e
+            logger.warning(f"Attempt {attempt} VPN rotation failed: {e}")
+            if attempt < 3:
+                await asyncio.sleep(30)
+        except Exception as e:
+            last_error = e
+            logger.error(f"Attempt {attempt} failed: {e}")
+            if attempt < 3:
+                await asyncio.sleep(15)
+
+    if isinstance(last_error, MediaDownloadError):
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "media_download_failed", "message": str(last_error)},
+        )
+    raise HTTPException(
+        status_code=503 if isinstance(last_error, RateLimitError) else 500,
+        detail=str(last_error),
+    )
+
+
+@router.post("/scrape", response_model=ThreadsScrapeResponse)
+async def process_scrape_request(request: ScrapeRequest):
+    code = await resolve_post_id(str(request.url))
+    return await storage.singleflight(code, lambda: _process_scrape_request(code))
+
+
+@router.post("/inspect", response_model=ThreadsScrapeResponse)
+async def inspect_post_request(request: ScrapeRequest):
+    code = await resolve_post_id(str(request.url))
+    try:
+        return await storage.singleflight(
+            f"inspect:{code}",
+            lambda: _inspect_post(code),
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RateLimitError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/media/{platform}/{post_id}/{filename:path}")
+async def serve_media(platform: str, post_id: str, filename: str):
+    if platform != "threads":
+        raise HTTPException(status_code=404, detail="Invalid platform")
+    if ".." in filename or filename.startswith("/"):
+        raise HTTPException(status_code=404, detail="Invalid path")
+
+    file_path = storage.base_path / post_id / filename
+    resolved = file_path.resolve()
+    base_resolved = storage.base_path.resolve()
+    if not str(resolved).startswith(str(base_resolved)):
+        raise HTTPException(status_code=404, detail="Invalid path")
+
+    if not resolved.exists() or not resolved.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(resolved)
+
+
+@router.get("/health")
+async def health_check():
+    try:
+        status = await gluetun.get_vpn_status()
+        vpn_status = status.get("status", "").lower()
+        if gluetun.enabled and vpn_status != "running":
+            raise HTTPException(status_code=503, detail=f"VPN not running: {vpn_status}")
+        return {
+            "status": "healthy",
+            "service": "threads",
+            "vpn": status,
+            "extraction": scraper.metrics_snapshot(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"VPN check failed: {e}")
+
+
+# Register with the global plugin registry on import.
+registry.register(
+    ScraperPlugin(
+        name="threads",
+        router=router,
+        route_patterns=["threads.net", "threads.com"],
+    )
+)
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Release shared storage and scraper clients when the service stops."""
+    try:
+        yield
+    finally:
+        await asyncio.gather(storage.close(), scraper.close())
+
+
+# Standalone FastAPI app for container mode
+app = FastAPI(title="Pinchana Threads", version="0.1.0", lifespan=lifespan)
+app.include_router(router)

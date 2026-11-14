@@ -9,6 +9,7 @@ on:
       - 'VERSION'
       - 'docker-compose*.yml'
       - 'scripts/version.py'
+      - 'scripts/build_manifest.py'
       - 'pinchana-*/**'
       - 'pinchana-*'
   workflow_dispatch:
@@ -28,8 +29,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
@@ -91,7 +90,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Detect changed services
@@ -120,7 +118,8 @@ jobs:
               selected=("${all[@]}")
             else
               # A change in any bundled package changes the server image.
-              if grep -E '^pinchana-' <<< "$changed" | grep -qvE '^pinchana-dlp(/|$)'; then
+              if grep -qFx 'scripts/build_manifest.py' <<< "$changed" ||
+                 grep -E '^pinchana-' <<< "$changed" | grep -qvE '^pinchana-dlp(/|$)'; then
                 selected+=(server)
               fi
               if grep -qE '^pinchana-dlp(/|$)' <<< "$changed"; then
@@ -147,7 +146,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Set up Docker Buildx

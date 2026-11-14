@@ -71,15 +71,6 @@ def ensure_clean() -> None:
         raise RuntimeError("working tree is not clean; commit or stash changes first")
 
 
-def ensure_submodules_pinned() -> None:
-    result = output(["git", "submodule", "status", "--recursive"])
-    bad = [line for line in result.splitlines() if line[:1] in {"-", "+", "U"}]
-    if bad:
-        raise RuntimeError(
-            "submodules are not pinned to the parent commit:\n" + "\n".join(bad)
-        )
-
-
 def remote_tag_exists(tag: str) -> bool:
     result = run(
         ["git", "ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}"],
@@ -228,7 +219,6 @@ def main() -> int:
             raise RuntimeError(f"description file not found: {description_file}")
 
         ensure_clean()
-        ensure_submodules_pinned()
         validate_release(tag, retag=args.retag)
         publish(
             tag=tag,

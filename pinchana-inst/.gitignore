@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[oc]
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+
+# Virtual environment
+.venv/
+
+# Environment variables
+.env
+
+# Tools
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Logs
+*.log
+
+# Runtime cache (downloaded media)
+cache/
+config/
+
+# Playwright
+screenshot*.png

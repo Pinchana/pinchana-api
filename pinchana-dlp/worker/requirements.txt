@@ -1,0 +1,4 @@
+cryptography==50.0.2
+requests==2.34.2
+yt-dlp[default]==2026.10.26
+deno==2.9.8

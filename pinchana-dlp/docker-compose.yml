@@ -1,0 +1,135 @@
+services:
+  redis:
+    image: redis:7.4.5-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}", "--appendonly", "no", "--save", ""]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    networks: [dlp_backend]
+    user: "999:1000"
+    read_only: true
+    tmpfs: ["/data:rw,noexec,nosuid,nodev,size=64m,uid=999,gid=1000,mode=0700"]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  dlp-api:
+    build: ./api
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
+      JOBS_DIR: /data/jobs
+      DLP_HOST_COOKIES_FILE: /run/host-cookies/youtube.txt
+      DLP_GATEWAY_TOKEN: ${DLP_GATEWAY_TOKEN:?set DLP_GATEWAY_TOKEN}
+      JOB_TTL_SECONDS: ${DLP_JOB_TTL_SECONDS:-7200}
+      KEY_TTL_SECONDS: ${DLP_KEY_TTL_SECONDS:-300}
+      MAX_ACTIVE_JOBS: ${DLP_MAX_ACTIVE_JOBS:-3}
+      RATE_LIMIT_PER_MINUTE: ${DLP_RATE_LIMIT_PER_MINUTE:-10}
+      MAX_OUTPUT_BYTES: ${DLP_MAX_OUTPUT_BYTES:-8589934592}
+      DLP_DOH_URL: ${DLP_DOH_URL:-https://cloudflare-dns.com/dns-query}
+      DLP_DOH_PROXY_URL: http://vpn:8888
+    volumes:
+      - dlp-jobs:/data/jobs:ro
+      - ${DLP_HOST_COOKIES_DIR:-./secrets/dlp-cookies}:/run/host-cookies:ro
+    expose: ["8080"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      vpn:
+        condition: service_healthy
+    networks: [dlp_backend, dlp_worker]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  orchestrator:
+    build: ./orchestrator
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
+      WORKER_IMAGE: ${DLP_WORKER_IMAGE:-pinchana-dlp-worker:latest}
+      WORKER_NETWORK: ${DLP_WORKER_NETWORK:-pinchana-dlp-worker}
+      DLP_API_URL: http://dlp-api:8080
+      HOST_JOBS_DIR: ${DLP_HOST_JOBS_DIR:?set DLP_HOST_JOBS_DIR}
+      MAX_OUTPUT_BYTES: ${DLP_MAX_OUTPUT_BYTES:-8589934592}
+      EXECUTION_TIMEOUT_SECONDS: ${DLP_EXECUTION_TIMEOUT_SECONDS:-2700}
+      VPN_PROXY_URL: http://vpn:8888
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DLP_HOST_JOBS_DIR:?set DLP_HOST_JOBS_DIR}:${DLP_HOST_JOBS_DIR:?set DLP_HOST_JOBS_DIR}
+    depends_on:
+      redis:
+        condition: service_healthy
+      dlp-api:
+        condition: service_healthy
+      vpn:
+        condition: service_healthy
+    networks: [dlp_backend]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; import time; p=Path('/tmp/orchestrator-ready'); raise SystemExit(0 if p.exists() and time.time() - p.stat().st_mtime < 20 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  vpn:
+    image: ${DLP_VPN_IMAGE:-qmcgaw/gluetun:v3}
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun:/dev/net/tun]
+    dns: [1.1.1.1, 1.0.0.1]
+    environment:
+      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER:-nordvpn}
+      VPN_TYPE: ${VPN_TYPE:-wireguard}
+      WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY:-}
+      OPENVPN_USER: ${OPENVPN_USER:-}
+      OPENVPN_PASSWORD: ${OPENVPN_PASSWORD:-}
+      OPENVPN_PROTOCOL: ${OPENVPN_PROTOCOL:-tcp}
+      SERVER_COUNTRIES: ${SERVER_COUNTRIES:-}
+      DNS_UPSTREAM_RESOLVER_TYPE: ${DNS_UPSTREAM_RESOLVER_TYPE:-doh}
+      DNS_UPSTREAM_RESOLVERS: cloudflare
+      DNS_CACHING: "on"
+      HEALTH_ICMP_TARGET_IPS: 1.1.1.1,1.0.0.1
+      HTTPPROXY: "on"
+      HTTPPROXY_LISTENING_ADDRESS: :8888
+    networks: [dlp_worker, dlp_egress]
+    healthcheck:
+      test: ["CMD-SHELL", "/gluetun-entrypoint healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  worker-image:
+    image: ${DLP_WORKER_IMAGE:-pinchana-dlp-worker:latest}
+    build: ./worker
+    profiles: [build]
+    entrypoint: ["/bin/true"]
+
+volumes:
+  dlp-jobs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DLP_HOST_JOBS_DIR:?set DLP_HOST_JOBS_DIR}
+
+networks:
+  dlp_backend:
+    internal: true
+  dlp_worker:
+    name: ${DLP_WORKER_NETWORK:-pinchana-dlp-worker}
+    internal: true
+  dlp_egress: {}
