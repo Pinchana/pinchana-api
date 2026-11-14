@@ -1,19 +1,26 @@
-"""Read visual dimensions from media files in the shared scraper cache."""
+"""Read video durations and visual dimensions from media files in the shared scraper cache."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import subprocess
+from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
+from pinchana_core.video_metadata import probe_video
 
 from .schemas import MediaDimensions
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class MediaMetadata:
+    dimensions: MediaDimensions | None = None
+    duration: int | None = None
 
 
 class MediaDimensionProbe:
@@ -22,7 +29,7 @@ class MediaDimensionProbe:
     def __init__(self, base_path: str | Path, concurrency: int = 4):
         self.base_path = Path(base_path)
         self._limit = asyncio.Semaphore(max(1, concurrency))
-        self._cache: dict[Path, tuple[tuple[int, int], MediaDimensions | None]] = {}
+        self._cache: OrderedDict[Path, tuple[tuple[int, int], MediaMetadata]] = OrderedDict()
         self._cache_lock = asyncio.Lock()
 
     def _resolve_media_path(self, url: str) -> Path | None:
@@ -42,30 +49,43 @@ class MediaDimensionProbe:
             return None
         return resolved
 
-    async def dimensions_for(self, url: str, media_type: str) -> MediaDimensions | None:
+    async def metadata_for(self, url: str, media_type: str) -> MediaMetadata:
         if media_type not in {"image", "video"}:
-            return None
+            return MediaMetadata()
         path = self._resolve_media_path(url)
-        if path is None or not path.is_file():
-            return None
-        stat = path.stat()
+        if path is None:
+            return MediaMetadata()
+        try:
+            stat = path.stat()
+        except OSError:
+            return MediaMetadata()
+        if not path.is_file():
+            return MediaMetadata()
         signature = (stat.st_mtime_ns, stat.st_size)
         async with self._cache_lock:
             cached = self._cache.get(path)
             if cached and cached[0] == signature:
+                self._cache.move_to_end(path)
                 return cached[1]
 
         async with self._limit:
             if media_type == "image":
-                # Pillow reads only the image header for ``size``; keeping this
-                # inline avoids creating a worker thread for a tiny cache read.
-                dimensions = self._probe_image(path)
+                metadata = MediaMetadata(dimensions=self._probe_image(path))
             else:
-                dimensions = self._probe_video(path)
+                metadata = await asyncio.to_thread(self._probe_video, path)
+                if metadata is None:
+                    return MediaMetadata()
+
+        # Telegram delivery scopes are disposable, and each URL is normally read once.
+        if path.is_relative_to(self.base_path.resolve() / ".transient"):
+            return metadata
 
         async with self._cache_lock:
-            self._cache[path] = (signature, dimensions)
-        return dimensions
+            self._cache[path] = (signature, metadata)
+            self._cache.move_to_end(path)
+            if len(self._cache) > 4096:
+                self._cache.popitem(last=False)
+        return metadata
 
     @staticmethod
     def _probe_image(path: Path) -> MediaDimensions | None:
@@ -96,47 +116,19 @@ class MediaDimensionProbe:
                     continue
         return 0
 
-    def _probe_video(self, path: Path) -> MediaDimensions | None:
+    def _probe_video(self, path: Path) -> MediaMetadata | None:
+        result = probe_video(path)
+        if result is None:
+            logger.warning("media_probe_failed type=video path=%s", path)
+            return None
+        stream, duration = result
+        dimensions = None
         try:
-            process = subprocess.run(
-                [
-                    "ffprobe",
-                    "-v",
-                    "error",
-                    "-select_streams",
-                    "v:0",
-                    "-show_entries",
-                    "stream=width,height:stream_tags=rotate:stream_side_data=rotation",
-                    "-of",
-                    "json",
-                    str(path),
-                ],
-                capture_output=True,
-                check=False,
-                timeout=5,
-            )
-        except FileNotFoundError:
-            logger.warning("media_dimension_probe_unavailable executable=ffprobe")
-            return None
-        except (OSError, subprocess.TimeoutExpired):
-            logger.warning("media_dimension_probe_failed type=video path=%s", path)
-            return None
-        if process.returncode != 0:
-            logger.warning(
-                "media_dimension_probe_failed type=video path=%s error=%s",
-                path,
-                process.stderr.decode("utf-8", errors="replace")[:200],
-            )
-            return None
-        try:
-            payload = json.loads(process.stdout)
-            streams = payload.get("streams") or []
-            stream = streams[0]
             width = int(stream["width"])
             height = int(stream["height"])
             if abs(self._rotation(stream)) % 180 == 90:
                 width, height = height, width
-            return MediaDimensions(width=width, height=height)
-        except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            dimensions = MediaDimensions(width=width, height=height)
+        except (KeyError, TypeError, ValueError):
             logger.warning("media_dimension_probe_invalid type=video path=%s", path)
-            return None
+        return MediaMetadata(dimensions=dimensions, duration=duration)

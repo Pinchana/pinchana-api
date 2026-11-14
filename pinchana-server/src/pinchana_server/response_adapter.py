@@ -6,6 +6,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
+from pinchana_core.video_metadata import duration_seconds
+
 from .media_probe import MediaDimensionProbe
 from .schemas import (
     EngagementMetadata,
@@ -108,7 +110,7 @@ def _asset(
         "role": role,
         "url": normalized_url,
         "preview_url": _text(preview_url),
-        "duration_seconds": _non_negative_int(duration),
+        "duration_seconds": duration_seconds(duration) if media_type == "video" else _non_negative_int(duration),
         "title": _text(title),
         "artist": _text(artist),
         "looping": bool(looping),
@@ -143,6 +145,7 @@ def _media_descriptors(raw: dict[str, Any]) -> list[dict[str, Any]]:
                         role="content",
                         url=item.get("video_url"),
                         preview_url=item.get("thumbnail_url"),
+                        duration=item.get("duration_seconds") or item.get("duration"),
                         looping=item.get("looping"),
                     )
                 else:
@@ -285,12 +288,15 @@ async def _normalize_post_data(
     include_media: bool,
 ) -> ScrapeData:
     descriptors = _media_descriptors(raw) if include_media else []
-    dimensions = await asyncio.gather(*(
-        probe.dimensions_for(item["url"], item["type"])
+    metadata = await asyncio.gather(*(
+        probe.metadata_for(item["url"], item["type"])
         for item in descriptors
     ))
+    for item, details in zip(descriptors, metadata):
+        if item["type"] == "video" and item["duration_seconds"] is None:
+            item["duration_seconds"] = details.duration
     media = [
-        MediaAsset(index=index, dimensions=dimensions[index], **item)
+        MediaAsset(index=index, dimensions=metadata[index].dimensions, **item)
         for index, item in enumerate(descriptors)
     ]
 

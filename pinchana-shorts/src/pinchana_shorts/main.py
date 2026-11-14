@@ -14,6 +14,7 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from pinchana_core.models import ScrapeRequest, ScrapeResponse
 from pinchana_core.plugins import ScraperPlugin, registry
 from pinchana_core.storage import MediaStorage
+from pinchana_core.video_metadata import duration_seconds, probe_video
 from pinchana_core.vpn import GluetunController, VpnRotationError
 from pinchana_core.youtube_cookies import resolve_cookie_source, runtime_cookiefile
 from yt_dlp import YoutubeDL
@@ -200,6 +201,12 @@ async def _scrape_once(url: str, short_id_hint: str | None) -> ScrapeResponse:
         cached = storage.load_metadata(short_id)
         if cached and _cached_media_ready(cached):
             logger.info("Cache hit for %s", short_id)
+            if duration_seconds(cached.get("duration")) is None:
+                video_path = _media_url_to_path(cached.get("video_url"))
+                metadata = await asyncio.to_thread(probe_video, video_path)
+                if metadata and metadata[1] is not None:
+                    cached["duration"] = metadata[1]
+                    storage.save_metadata(short_id, cached)
             return ScrapeResponse(**cached)
         logger.info("Cache invalid for %s, missing media; re-scraping", short_id)
 
@@ -226,6 +233,11 @@ async def _scrape_once(url: str, short_id_hint: str | None) -> ScrapeResponse:
     if not video_file:
         raise HTTPException(status_code=503, detail="Media download failed")
 
+    duration = duration_seconds(info.get("duration"))
+    if duration is None:
+        metadata = await asyncio.to_thread(probe_video, video_file)
+        if metadata:
+            duration = metadata[1]
     video_ext = video_file.suffix.lstrip(".") or "mp4"
     thumb_ext = thumb_file.suffix.lstrip(".") if thumb_file else "jpg"
 
@@ -236,6 +248,7 @@ async def _scrape_once(url: str, short_id_hint: str | None) -> ScrapeResponse:
         media_type="video",
         thumbnail_url=f"/media/shorts/{short_id}/thumbnail.{thumb_ext}" if thumb_file else "",
         video_url=f"/media/shorts/{short_id}/video.{video_ext}",
+        duration=duration,
         audio_url=None,
         carousel=None,
     )

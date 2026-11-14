@@ -23,6 +23,7 @@ class MediaItem(BaseModel):
     media_type: str
     thumbnail_url: str
     video_url: Optional[str] = None
+    duration: Optional[int] = None
     looping: bool = False
 
 

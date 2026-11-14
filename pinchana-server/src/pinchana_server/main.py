@@ -29,6 +29,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pinchana_core.models import ScrapeRequest, ScrapeResponse
 from pinchana_core.storage import MediaStorage
+from pinchana_core.video_metadata import duration_seconds
 from pinchana_core.vpn import GluetunController, VpnRotationError
 
 from .cache_admin import CacheClearRequest, CacheClearResponse, clear_media_cache, resolve_cache_target
@@ -1021,6 +1022,13 @@ async def _process_scrape_payload(
 async def _process_scrape_request(request: ScrapeRequest, http_request: Request) -> ScrapeResponse:
     """Return the existing public response shape for legacy clients."""
     _platform, payload = await _process_scrape_payload(request, http_request)
+    videos = [payload, *(payload.get("carousel") or [])]
+    for video in videos:
+        if isinstance(video, dict) and (url := video.get("video_url")):
+            duration = duration_seconds(video.get("duration_seconds") or video.get("duration"))
+            if duration is None:
+                duration = (await dimension_probe.metadata_for(url, "video")).duration
+            video["duration"] = duration
     return ScrapeResponse(**payload)
 
 

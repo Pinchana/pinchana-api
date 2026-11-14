@@ -20,7 +20,7 @@ from pinchana_server.main import (
     api_http_exception_handler,
     app,
 )
-from pinchana_server.media_probe import MediaDimensionProbe
+from pinchana_server.media_probe import MediaDimensionProbe, MediaMetadata
 from pinchana_server.response_adapter import (
     normalize_inspect_response,
     normalize_scrape_response,
@@ -52,7 +52,7 @@ class V1ResponseAdapterTests(unittest.IsolatedAsyncioTestCase):
         from pinchana_server.schemas import MediaDimensions
 
         probe = AsyncMock(spec=MediaDimensionProbe)
-        probe.dimensions_for.return_value = MediaDimensions(width=1280, height=720)
+        probe.metadata_for.return_value = MediaMetadata(MediaDimensions(width=1280, height=720), 21)
         response = await normalize_scrape_response(
             _legacy_payload(
                 shortcode="abc123",
@@ -76,11 +76,12 @@ class V1ResponseAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.data.author.name, "Channel Name")
         self.assertEqual(response.data.author.username, "channel-name")
         self.assertEqual(response.data.media[0].type, "video")
+        self.assertEqual(response.data.media[0].duration_seconds, 59)
         self.assertEqual(response.data.media[0].dimensions.model_dump(), {"width": 1280, "height": 720})
 
     async def test_quote_is_nested_in_scrape_but_inspection_skips_media(self):
         probe = AsyncMock(spec=MediaDimensionProbe)
-        probe.dimensions_for.return_value = None
+        probe.metadata_for.return_value = MediaMetadata()
         raw = _legacy_payload(
             shortcode="main",
             thumbnail_url="",
@@ -117,9 +118,9 @@ class V1ResponseAdapterTests(unittest.IsolatedAsyncioTestCase):
         from pinchana_server.schemas import MediaDimensions
 
         probe = AsyncMock(spec=MediaDimensionProbe)
-        probe.dimensions_for.side_effect = [
-            MediaDimensions(width=1200, height=800),
-            MediaDimensions(width=1080, height=1920),
+        probe.metadata_for.side_effect = [
+            MediaMetadata(MediaDimensions(width=1200, height=800)),
+            MediaMetadata(MediaDimensions(width=1080, height=1920), 18),
         ]
         response = await normalize_scrape_response(
             _legacy_payload(
@@ -168,6 +169,7 @@ class V1ResponseAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item.index for item in data.media], [0, 1])
         self.assertFalse(data.media[0].looping)
         self.assertTrue(data.media[1].looping)
+        self.assertEqual(data.media[1].duration_seconds, 18)
         self.assertEqual(data.media[0].dimensions.model_dump(), {"width": 1200, "height": 800})
         self.assertEqual(data.media[1].dimensions.model_dump(), {"width": 1080, "height": 1920})
         self.assertEqual(data.engagement.views, 99)
@@ -177,7 +179,7 @@ class V1ResponseAdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_slideshow_audio_and_music_cover_are_typed_without_duplicates(self):
         probe = AsyncMock(spec=MediaDimensionProbe)
-        probe.dimensions_for.return_value = None
+        probe.metadata_for.return_value = MediaMetadata()
         slideshow = await normalize_scrape_response(
             _legacy_payload(
                 shortcode="slides",
@@ -236,11 +238,11 @@ class V1ResponseAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.data.media, [])
         self.assertEqual(response.data.content.html, "<p>A caption</p>")
         self.assertTrue(response.data.safety.text_spoiler)
-        probe.dimensions_for.assert_not_awaited()
+        probe.metadata_for.assert_not_awaited()
 
     async def test_threads_music_and_timestamp_are_normalized(self):
         probe = AsyncMock(spec=MediaDimensionProbe)
-        probe.dimensions_for.return_value = None
+        probe.metadata_for.return_value = MediaMetadata()
         response = await normalize_scrape_response(
             _legacy_payload(
                 shortcode="thread-music",
@@ -271,7 +273,7 @@ class V1ResponseAdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_tracklist_becomes_ordered_audio_items(self):
         probe = AsyncMock(spec=MediaDimensionProbe)
-        probe.dimensions_for.return_value = None
+        probe.metadata_for.return_value = MediaMetadata()
         response = await normalize_scrape_response(
             _legacy_payload(
                 shortcode="album",
@@ -301,10 +303,10 @@ class MediaDimensionProbeTests(unittest.IsolatedAsyncioTestCase):
             post.mkdir()
             Image.new("RGB", (640, 360)).save(post / "image.png")
             probe = MediaDimensionProbe(base)
-            first = await probe.dimensions_for("/media/test/post/image.png", "image")
+            first = await probe.metadata_for("/media/test/post/image.png", "image")
             with patch.object(probe, "_probe_image", wraps=probe._probe_image) as image_probe:
-                second = await probe.dimensions_for("/media/test/post/image.png", "image")
-            self.assertEqual(first.model_dump(), {"width": 640, "height": 360})
+                second = await probe.metadata_for("/media/test/post/image.png", "image")
+            self.assertEqual(first.dimensions.model_dump(), {"width": 640, "height": 360})
             self.assertEqual(second, first)
             image_probe.assert_not_called()
 
@@ -319,21 +321,24 @@ class MediaDimensionProbeTests(unittest.IsolatedAsyncioTestCase):
                 args=["ffprobe"],
                 returncode=0,
                 stdout=json.dumps({
-                    "streams": [{"width": 1920, "height": 1080, "side_data_list": [{"rotation": -90}]}]
+                    "streams": [{"width": 1920, "height": 1080, "duration": "N/A",
+                                 "side_data_list": [{"rotation": -90}]}],
+                    "format": {"duration": "12.3"},
                 }).encode(),
                 stderr=b"",
             )
             with patch("subprocess.run", return_value=process):
-                dimensions = await MediaDimensionProbe(base).dimensions_for(
+                metadata = await MediaDimensionProbe(base).metadata_for(
                     "/media/test/post/video.mp4", "video"
                 )
-            self.assertEqual(dimensions.model_dump(), {"width": 1080, "height": 1920})
+            self.assertEqual(metadata.dimensions.model_dump(), {"width": 1080, "height": 1920})
+            self.assertEqual(metadata.duration, 13)
 
     async def test_external_and_missing_media_return_null(self):
         probe = MediaDimensionProbe("/tmp/does-not-exist")
-        self.assertIsNone(await probe.dimensions_for("https://example.com/image.jpg", "image"))
-        self.assertIsNone(await probe.dimensions_for("/media/test/missing/image.jpg", "image"))
-        self.assertIsNone(await probe.dimensions_for("/media/test/missing/audio.mp3", "audio"))
+        self.assertEqual(MediaMetadata(), await probe.metadata_for("https://example.com/image.jpg", "image"))
+        self.assertEqual(MediaMetadata(), await probe.metadata_for("/media/test/missing/image.jpg", "image"))
+        self.assertEqual(MediaMetadata(), await probe.metadata_for("/media/test/missing/audio.mp3", "audio"))
 
 
 class V1EndpointTests(unittest.IsolatedAsyncioTestCase):
