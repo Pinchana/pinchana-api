@@ -9,6 +9,7 @@ Platform = Literal[
     "tiktok",
     "instagram",
     "shorts",
+    "ytgroups",
     "soundcloud",
     "ytmusic",
     "spotify",

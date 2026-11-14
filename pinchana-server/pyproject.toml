@@ -17,6 +17,7 @@ dependencies = [
     "pinchana-threads",
     "pinchana-tiktok",
     "pinchana-twitter",
+    "pinchana-ytgroups",
     "pinchana-ytmusic",
     "fastapi>=0.162.2",
     "httpx>=0.28.1",
@@ -42,6 +43,7 @@ pinchana-spotify = { path = "../pinchana-spotify" }
 pinchana-threads = { path = "../pinchana-threads" }
 pinchana-tiktok = { path = "../pinchana-tiktok" }
 pinchana-twitter = { path = "../pinchana-twitter" }
+pinchana-ytgroups = { path = "../pinchana-ytgroups" }
 pinchana-ytmusic = { path = "../pinchana-ytmusic" }
 
 [build-system]

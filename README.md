@@ -14,6 +14,7 @@ Pinchana API is a Docker Compose-based media extraction gateway. A central FastA
 | TikTok | `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`, `tt.site` |
 | Instagram | `instagram.com`, `instagr.am` |
 | YouTube Shorts | `youtube.com/shorts` |
+| YouTube groups | `youtube.com/watch`, `youtu.be` via the Telegram client endpoint |
 | SoundCloud | `soundcloud.com`, `on.soundcloud.com` |
 | YouTube Music | `music.youtube.com` |
 | Apple Music | `music.apple.com` (individual tracks only) |

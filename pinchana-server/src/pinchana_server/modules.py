@@ -26,8 +26,10 @@ PACKAGES = {
     "twitter": "pinchana_twitter",
     "coub": "pinchana_coub",
     "bluesky": "pinchana_bluesky",
+    "ytgroups": "pinchana_ytgroups",
 }
 TWITTER_SHARE_HOSTS = ("vxtwitter.com", "fxtwitter.com")
+SCRAPE_TIMEOUTS = {"apple_music": 600, "ytgroups": 600}
 
 
 @dataclass(frozen=True)
@@ -61,8 +63,7 @@ class ScraperModule:
         # The model copy doesn't rerun the cache-scope validator.
         set_cache_scope(request.cache_scope)
         try:
-            timeout = 600 if self.name == "apple_music" else 120
-            async with asyncio.timeout(timeout):
+            async with asyncio.timeout(SCRAPE_TIMEOUTS.get(self.name, 120)):
                 result = jsonable_encoder(await route.endpoint(request))
             if not isinstance(result, dict):
                 raise HTTPException(502, "The scraper returned an invalid response")

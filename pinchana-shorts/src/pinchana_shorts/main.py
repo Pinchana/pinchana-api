@@ -15,6 +15,7 @@ from pinchana_core.models import ScrapeRequest, ScrapeResponse
 from pinchana_core.plugins import ScraperPlugin, registry
 from pinchana_core.storage import MediaStorage
 from pinchana_core.vpn import GluetunController, VpnRotationError
+from pinchana_core.youtube_cookies import resolve_cookie_source, runtime_cookiefile
 from yt_dlp import YoutubeDL
 
 logging.basicConfig(level=logging.INFO)
@@ -107,49 +108,6 @@ def _extract_short_id(url: str) -> str | None:
     return None
 
 
-def _resolve_cookie_source() -> Path | None:
-    cookie_file_env = os.getenv("YTDLP_COOKIE_FILE", "").strip()
-    if cookie_file_env:
-        path = Path(cookie_file_env)
-        if path.is_file():
-            return path
-        logger.warning("Cookie file not found: %s", path)
-        return None
-
-    cookies_dir = Path(os.getenv("YTDLP_COOKIES_DIR", "/run/pinchana-cookies"))
-    if not cookies_dir.exists() or not cookies_dir.is_dir():
-        return None
-
-    for name in ("youtube.com_cookies.txt", "cookies.txt"):
-        candidate = cookies_dir / name
-        if candidate.is_file():
-            return candidate
-
-    candidates = sorted(p for p in cookies_dir.glob("*.txt") if p.is_file())
-    return candidates[0] if candidates else None
-
-
-def _prepare_runtime_cookiefile(source: Path | None) -> Path | None:
-    if source is None:
-        return None
-
-    tmp_dir = Path(os.getenv("YTDLP_COOKIE_TMP_DIR", "/tmp"))
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    tmp_cookie = tmp_dir / f"ytcookies-{uuid.uuid4().hex}.txt"
-    shutil.copy2(source, tmp_cookie)
-    os.chmod(tmp_cookie, 0o600)
-    return tmp_cookie
-
-
-def _cleanup_temp_cookiefile(path: Path | None) -> None:
-    if not path:
-        return
-    try:
-        path.unlink(missing_ok=True)
-    except Exception:
-        logger.warning("Failed cleaning temporary cookie file")
-
-
 def _find_downloaded_file(base_dir: Path, prefix: str) -> Path | None:
     matches = sorted(p for p in base_dir.glob(f"{prefix}.*") if p.is_file())
     return matches[0] if matches else None
@@ -160,7 +118,7 @@ def _optimize_if_needed(video_path: Path, duration_seconds: float | int | None) 
     return video_path
 
 
-def _download_short(url: str, post_dir: Path, cookiefile: Path | None) -> tuple[dict, Path | None, Path | None]:
+def _download_short(url: str, post_dir: Path) -> tuple[dict, Path | None, Path | None]:
     outtmpl = {
         "default": str(post_dir / "video.%(ext)s"),
         "thumbnail": str(post_dir / "thumbnail.%(ext)s"),
@@ -181,11 +139,11 @@ def _download_short(url: str, post_dir: Path, cookiefile: Path | None) -> tuple[
         "fragment_retries": 2,
         "concurrent_fragment_downloads": 1,
     }
-    if cookiefile:
-        ydl_opts["cookiefile"] = str(cookiefile)
-
-    with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.sanitize_info(ydl.extract_info(url, download=True))
+    with runtime_cookiefile() as cookiefile:
+        if cookiefile:
+            ydl_opts["cookiefile"] = str(cookiefile)
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.sanitize_info(ydl.extract_info(url, download=True))
 
     video_file = _find_downloaded_file(post_dir, "video")
     thumb_file = _find_downloaded_file(post_dir, "thumbnail")
@@ -236,59 +194,54 @@ def _is_rate_limited(e: Exception) -> bool:
 
 
 async def _scrape_once(url: str, short_id_hint: str | None) -> ScrapeResponse:
-    cookie_source = _resolve_cookie_source()
-    runtime_cookie = _prepare_runtime_cookiefile(cookie_source)
-    try:
-        short_id = short_id_hint or _extract_short_id(url) or f"yt-{uuid.uuid4().hex[:10]}"
+    short_id = short_id_hint or _extract_short_id(url) or f"yt-{uuid.uuid4().hex[:10]}"
 
-        if storage.is_cached(short_id):
-            cached = storage.load_metadata(short_id)
-            if cached and _cached_media_ready(cached):
-                logger.info("Cache hit for %s", short_id)
-                return ScrapeResponse(**cached)
-            logger.info("Cache invalid for %s, missing media; re-scraping", short_id)
+    if storage.is_cached(short_id):
+        cached = storage.load_metadata(short_id)
+        if cached and _cached_media_ready(cached):
+            logger.info("Cache hit for %s", short_id)
+            return ScrapeResponse(**cached)
+        logger.info("Cache invalid for %s, missing media; re-scraping", short_id)
 
-        storage.prepare_post_dir(short_id)
-        post_dir = storage._post_dir(short_id)
+    storage.prepare_post_dir(short_id)
+    post_dir = storage._post_dir(short_id)
 
-        async with YTDLP_LIMIT:
-            info, video_file, thumb_file = await asyncio.to_thread(
-                _download_short, url, post_dir, runtime_cookie
-            )
-
-        real_short_id = info.get("id") or short_id
-        if real_short_id != short_id:
-            real_dir = storage._post_dir(real_short_id)
-            if real_dir.exists():
-                shutil.rmtree(real_dir)
-            post_dir.replace(real_dir)
-            post_dir = real_dir
-            short_id = real_short_id
-
-        video_file = _find_downloaded_file(post_dir, "video")
-        thumb_file = _find_downloaded_file(post_dir, "thumbnail")
-
-        if not video_file:
-            raise HTTPException(status_code=503, detail="Media download failed")
-
-        video_ext = video_file.suffix.lstrip(".") or "mp4"
-        thumb_ext = thumb_file.suffix.lstrip(".") if thumb_file else "jpg"
-
-        response = ScrapeResponse(
-            shortcode=short_id,
-            caption=info.get("title") or info.get("description") or short_id,
-            author=info.get("uploader") or info.get("channel") or "",
-            media_type="video",
-            thumbnail_url=f"/media/shorts/{short_id}/thumbnail.{thumb_ext}" if thumb_file else "",
-            video_url=f"/media/shorts/{short_id}/video.{video_ext}",
-            audio_url=None,
-            carousel=None,
+    async with YTDLP_LIMIT:
+        info, video_file, thumb_file = await asyncio.to_thread(
+            _download_short, url, post_dir
         )
 
-        storage.save_metadata(short_id, response.model_dump())
-        return response
-    finally:
-        _cleanup_temp_cookiefile(runtime_cookie)
+    real_short_id = info.get("id") or short_id
+    if real_short_id != short_id:
+        real_dir = storage._post_dir(real_short_id)
+        if real_dir.exists():
+            shutil.rmtree(real_dir)
+        post_dir.replace(real_dir)
+        post_dir = real_dir
+        short_id = real_short_id
+
+    video_file = _find_downloaded_file(post_dir, "video")
+    thumb_file = _find_downloaded_file(post_dir, "thumbnail")
+
+    if not video_file:
+        raise HTTPException(status_code=503, detail="Media download failed")
+
+    video_ext = video_file.suffix.lstrip(".") or "mp4"
+    thumb_ext = thumb_file.suffix.lstrip(".") if thumb_file else "jpg"
+
+    response = ScrapeResponse(
+        shortcode=short_id,
+        caption=info.get("title") or info.get("description") or short_id,
+        author=info.get("uploader") or info.get("channel") or "",
+        media_type="video",
+        thumbnail_url=f"/media/shorts/{short_id}/thumbnail.{thumb_ext}" if thumb_file else "",
+        video_url=f"/media/shorts/{short_id}/video.{video_ext}",
+        audio_url=None,
+        carousel=None,
+    )
+
+    storage.save_metadata(short_id, response.model_dump())
+    return response
 
 
 async def _process_scrape_request(request: ScrapeRequest):
@@ -373,7 +326,7 @@ async def health_check():
             "status": "healthy",
             "service": "shorts",
             "vpn": status,
-            "cookies_available": _resolve_cookie_source() is not None,
+            "cookies_available": resolve_cookie_source() is not None,
         }
     except HTTPException:
         raise

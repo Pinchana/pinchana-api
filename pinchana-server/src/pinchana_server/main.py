@@ -889,6 +889,7 @@ def _http_error_code(status_code: int, detail: Any) -> tuple[str, str]:
         401: ("unauthorized", "Invalid or missing API key"),
         403: ("forbidden", raw_message),
         404: ("not_found", raw_message),
+        413: ("media_too_large", raw_message),
         429: ("rate_limited", "The upstream service is rate limited"),
         500: ("internal_error", "The scraper failed to process this URL"),
         502: ("invalid_upstream_response", "The scraper returned an invalid response"),
@@ -1175,6 +1176,30 @@ async def process_v1_scrape_request(
     return result
 
 
+@app.post("/v1/bot/ytgroups", response_model=ScrapeV1Response)
+async def scrape_youtube_for_group(
+    request: ScrapeRequest,
+    response: Response,
+    client_name: str = Depends(_require_api_key),
+):
+    """Prepare one full-format YouTube video for a Telegram upload."""
+    if not _is_telegram_client(client_name):
+        raise HTTPException(403, "Not a Telegram client")
+    scope = uuid.uuid4().hex
+    try:
+        payload = await modules["ytgroups"].run("scrape", request, cache_scope=scope)
+        result = await _normalize_module_payload(
+            "ytgroups", _transient_media_urls(payload, scope), str(request.url)
+        )
+    except HTTPException as exc:
+        if exc.status_code < 500:
+            await asyncio.to_thread(_remove_transient_scope, scope)
+        raise
+    response.headers["X-Pinchana-Cache-Scope"] = scope
+    response.headers["Cache-Control"] = "no-store"
+    return result
+
+
 @app.delete("/v1/bot/cache/{scope}", status_code=204)
 async def finish_telegram_cache_scope(
     scope: str,
@@ -1229,11 +1254,17 @@ async def _normalized_scrape_response(
     platform, payload = await _process_scrape_payload(
         request, http_request, cache_scope=cache_scope
     )
+    return await _normalize_module_payload(platform, payload, str(request.url))
+
+
+async def _normalize_module_payload(
+    platform: str, payload: dict[str, Any], source_url: str
+) -> ScrapeV1Response:
     try:
         return await normalize_scrape_response(
             payload,
             platform=platform,
-            source_url=str(request.url),
+            source_url=source_url,
             probe=dimension_probe,
         )
     except (ValueError, ValidationError) as exc:

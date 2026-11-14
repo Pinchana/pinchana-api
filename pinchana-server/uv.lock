@@ -1228,6 +1228,7 @@ dependencies = [
     { name = "pinchana-threads" },
     { name = "pinchana-tiktok" },
     { name = "pinchana-twitter" },
+    { name = "pinchana-ytgroups" },
     { name = "pinchana-ytmusic" },
     { name = "pydantic" },
     { name = "uvicorn" },
@@ -1254,6 +1255,7 @@ requires-dist = [
     { name = "pinchana-threads", directory = "../pinchana-threads" },
     { name = "pinchana-tiktok", directory = "../pinchana-tiktok" },
     { name = "pinchana-twitter", directory = "../pinchana-twitter" },
+    { name = "pinchana-ytgroups", directory = "../pinchana-ytgroups" },
     { name = "pinchana-ytmusic", directory = "../pinchana-ytmusic" },
     { name = "pydantic", specifier = ">=2.14.3" },
     { name = "uvicorn", specifier = ">=0.54.0" },
@@ -1418,6 +1420,23 @@ requires-dist = [
 dev = [
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "pytest-asyncio", specifier = ">=1.4.1.post1" },
+]
+
+[[package]]
+name = "pinchana-ytgroups"
+version = "26.11.7"
+source = { directory = "../pinchana-ytgroups" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "pinchana-core" },
+    { name = "yt-dlp", extra = ["default", "deno"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.162.2" },
+    { name = "pinchana-core", directory = "../pinchana-core" },
+    { name = "yt-dlp", extras = ["default", "deno"], specifier = ">=2026.10.26" },
 ]
 
 [[package]]
