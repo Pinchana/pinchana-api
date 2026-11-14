@@ -17,17 +17,6 @@ from pathlib import Path
 
 API_IMAGES = {
     "SERVER_IMAGE": "ghcr.io/pinchana/pinchana-api/server",
-    "TIKTOK_IMAGE": "ghcr.io/pinchana/pinchana-api/tiktok",
-    "INSTAGRAM_IMAGE": "ghcr.io/pinchana/pinchana-api/instagram",
-    "SHORTS_IMAGE": "ghcr.io/pinchana/pinchana-api/shorts",
-    "SOUNDCLOUD_IMAGE": "ghcr.io/pinchana/pinchana-api/soundcloud",
-    "YTMUSIC_IMAGE": "ghcr.io/pinchana/pinchana-api/ytmusic",
-    "APPLE_MUSIC_IMAGE": "ghcr.io/pinchana/pinchana-api/apple-music",
-    "SPOTIFY_IMAGE": "ghcr.io/pinchana/pinchana-api/spotify",
-    "DEEZER_IMAGE": "ghcr.io/pinchana/pinchana-api/deezer",
-    "THREADS_IMAGE": "ghcr.io/pinchana/pinchana-api/threads",
-    "TWITTER_IMAGE": "ghcr.io/pinchana/pinchana-api/twitter",
-    "COUB_IMAGE": "ghcr.io/pinchana/pinchana-api/coub",
 }
 DLP_IMAGES = {
     "DLP_API_IMAGE": "ghcr.io/pinchana/pinchana-api/dlp-api",

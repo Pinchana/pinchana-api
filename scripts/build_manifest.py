@@ -12,6 +12,7 @@ NAME_OVERRIDES = {
     "pinchana-inst": "instagram",
     "pinchana-server": "gateway",
 }
+PARENT_MODULES = {"bluesky": "pinchana-bluesky"}
 
 
 def git(*arguments: str) -> str:
@@ -35,6 +36,9 @@ def manifest() -> dict[str, dict[str, str]]:
             "commit": git("rev-parse", f"HEAD:{path}"),
             "repository": repository,
         }
+    for name, path in PARENT_MODULES.items():
+        if commit := git("log", "-1", "--format=%H", "--", path):
+            result[name] = {"commit": commit, "repository": REPOSITORY}
     return result
 
 

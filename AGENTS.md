@@ -2,9 +2,9 @@
 
 ## Project Structure & Module Organization
 
-This is a Docker Compose orchestration repo for the Pinchana scraping gateway. The root is not a Python package and has no root task runner. Each `pinchana-*` directory is an independent git submodule with its own `pyproject.toml`, `uv.lock`, `Dockerfile`, and `src/pinchana_<name>/` package. `pinchana-core` is shared by every service.
+This is a Docker Compose orchestration repo for the Pinchana scraping gateway. The root is not a Python package and has no root task runner. Scrapers are separate Python packages, mostly Git submodules, and the gateway image installs them at build time. `pinchana-core` is shared by the scraper packages.
 
-Ports: server `8080`, tiktok `8081`, inst `8082`, shorts `8083`, soundcloud `8084`, ytmusic `8085`, spotify `8086`, deezer `8087`, threads `8088`, twitter `8089`, gluetun control `8000`.
+The gateway listens on `8080`. Gluetun's control port is `8000`. DLP uses its dedicated internal network.
 
 ## Build, Test, and Development Commands
 
@@ -17,10 +17,10 @@ uv run uvicorn pinchana_<name>.main:app --reload
 uv run python -c "import pinchana_<name>; print('ok')"
 ```
 
-Build Docker images from the repo root because Dockerfiles copy `pinchana-core/` and the target service:
+Build the gateway image from the repo root so it can install the local packages:
 
 ```bash
-docker build -f pinchana-inst/Dockerfile -t pinchana-inst .
+docker build -f pinchana-server/Dockerfile -t pinchana-server .
 docker compose up -d
 docker compose -f docker-compose.dev.yml up -d --build
 ```
@@ -57,7 +57,7 @@ Production hosts update through `python scripts/update_rolling.py --env-file .en
 
 ## Networking & Configuration
 
-Runtime services use `network_mode: container:gluetun`; do not add `ports:` to scraper services. Add ports only to `gluetun` and `.env.example`. Never run `docker restart gluetun`; it clears VPN credentials. Use:
+The production gateway uses Gluetun's network namespace. New scraper packages use the gateway listener. Never run `docker restart gluetun`; it clears VPN credentials. Use:
 
 ```bash
 docker compose up -d --force-recreate gluetun

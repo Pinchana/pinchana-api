@@ -7,30 +7,46 @@
 
 Pinchana API is a Docker Compose-based media extraction gateway. A central FastAPI server accepts the versioned `/v1/scrape` request, selects a platform module, and returns a normalized response. The production stack routes outbound scraper traffic through Gluetun; the development stack can run without VPN credentials. The unversioned `/scrape` route remains available for existing integrations.
 
-## Supported services
+## Supported modules
 
-| Service | Port | Routes |
-| --- | ---: | --- |
-| server | 8080 | Gateway API |
-| tiktok | 8081 | `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com` |
-| instagram | 8082 | `instagram.com`, `instagr.am` |
-| shorts | 8083 | `youtube.com/shorts` |
-| soundcloud | 8084 | `soundcloud.com`, `on.soundcloud.com` |
-| ytmusic | 8085 | `music.youtube.com` |
-| apple_music | 8091 | `music.apple.com` (individual tracks only) |
-| spotify | 8086 | `open.spotify.com` |
-| deezer | 8087 | `deezer.com`, Deezer link domains |
-| threads | 8088 | `threads.net`, `threads.com` |
-| twitter | 8089 | `x.com`, `twitter.com`, `vxtwitter.com`, `fxtwitter.com` |
-| coub | 8090 | `coub.com/view`, `coub.com/embed` |
+| Module | Routes |
+| --- | --- |
+| TikTok | `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`, `tt.site` |
+| Instagram | `instagram.com`, `instagr.am` |
+| YouTube Shorts | `youtube.com/shorts` |
+| SoundCloud | `soundcloud.com`, `on.soundcloud.com` |
+| YouTube Music | `music.youtube.com` |
+| Apple Music | `music.apple.com` (individual tracks only) |
+| Spotify | `open.spotify.com` |
+| Deezer | `deezer.com` and Deezer share links |
+| Threads | `threads.net`, `threads.com` |
+| X / Twitter | `x.com`, `twitter.com`, `vxtwitter.com`, `fxtwitter.com` |
+| Coub | `coub.com/view`, `coub.com/embed` |
+| Bluesky | `bsky.app/profile/<handle-or-did>/post/<id>` |
 
-Gluetun's control API is exposed on port `8000`.
+All 12 scrapers are installed into the gateway image at build time. The gateway
+calls their Python handlers directly and serves the API and cached media on
+port `8080`. Production uses Gluetun for egress. Gluetun's authenticated control
+port defaults to `8000` on loopback. The optional DLP stack has its own internal
+network and isolated workers for private downloads.
+
+Bluesky returns public post text, photos, MP4 video, and one level of quotes.
+`/v1/inspect` returns post and quote metadata without downloading media.
+
+Threads uses its HTTP extractor first. The browser fallback uses the free,
+keyless CloakBrowser Chromium 146 release. Leave `CLOAKBROWSER_LICENSE_KEY`
+unset. The gateway downloads the browser from CloakBrowser on first use, and
+Compose keeps it in the `threads-browser` volume across upgrades.
 
 ## Repository layout
 
-This root repository only orchestrates submodules and Docker Compose. Each `pinchana-*` directory is an independent Python package with `pyproject.toml`, `uv.lock`, `Dockerfile`, and `src/pinchana_<name>/`.
+The top-level repository defines Compose, release tooling, and parent-owned
+packages including Bluesky and Apple Music. Other scrapers live in independent
+Git submodules. Each Python package has its own `pyproject.toml`, `uv.lock`, and
+source directory. The gateway locks and installs those packages together.
 
-`pinchana-core` contains shared models, storage, music helpers, Docker orchestration helpers, and Gluetun control logic. Every service depends on it through a local uv path dependency.
+`pinchana-core` contains shared models, storage, music helpers, and Gluetun
+control logic.
 
 ## Quick start
 
@@ -83,11 +99,17 @@ docker compose --env-file .env up --detach
 This is the supported production update path. It discovers the newest coherent
 CalVer release through the rolling `stable` channel, resolves Gluetun's stable
 `v3` release channel, and atomically stores immutable image digests in `.env`. By
-default it updates the main Gluetun, gateway, and scraper APIs. Add `--dlp` to
+default it updates the gateway image and Gluetun. Add `--dlp` to
 include all three DLP images and its dedicated Gluetun image; without that flag,
 DLP values are untouched.
 
-Build from source without a VPN (each service binds its own development port):
+When upgrading from the per-scraper Compose stack, pin the first release with
+the bundled gateway, then recreate the stack with `--remove-orphans` to remove
+the old scraper containers. If this Compose project already runs DLP, include
+`--profile dlp` when applying the update. The shared `scraper-cache` volume is
+reused.
+
+Build the gateway from source without a VPN:
 
 ```bash
 docker compose --env-file .env -f docker-compose.dev.yml up --detach --build
@@ -109,7 +131,7 @@ curl --fail-with-body --silent --show-error \
   --data '{"url":"https://www.instagram.com/p/REPLACE_WITH_PUBLIC_SHORTCODE/"}'
 ```
 
-The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, Coub, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/v1/scrape`, legacy `/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
+The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, Bluesky, Coub, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/v1/scrape`, legacy `/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
 
 `/v1/scrape` returns `{data, meta}`. Source, content, author, engagement, safety,
 music, and link metadata are grouped, while all downloadable images, videos,
@@ -174,13 +196,14 @@ Admin endpoints:
 
 ## Configuration Notes
 
-In `docker-compose.yml`, all scraper and server containers use:
+In production, the gateway uses Gluetun's network namespace:
 
 ```yaml
 network_mode: container:gluetun
 ```
 
-Do not add `ports:` to production scraper services. Publish new production service ports on `gluetun` and mirror them in `.env.example`. `docker-compose.dev.yml` uses a normal bridge network, direct service ports, Compose DNS names, and `VPN_ENABLED=false`.
+Gluetun publishes the gateway listener. Development Compose publishes the same
+listener directly and sets `VPN_ENABLED=false`.
 
 Never run `docker restart gluetun`; it can clear VPN credentials and cause `AUTH_ERROR`. Recreate it instead:
 
@@ -192,13 +215,12 @@ Shorts can use YouTube cookies from `SHORTS_COOKIES_DIR` mounted read-only to `/
 
 ## Development
 
-Work inside submodules:
+Run all scrapers in the gateway locally:
 
 ```bash
-cd pinchana-inst
-uv sync --frozen
-uv run uvicorn pinchana_inst.main:app --reload
-uv run python -c "import pinchana_inst; print('ok')"
+cd pinchana-server
+uv sync --locked
+VPN_ENABLED=false uv run uvicorn pinchana_server.main:app --reload
 ```
 
 Run Instagram tests:
@@ -212,15 +234,15 @@ PINCHANA_INST_LIVE=1 uv run pytest -q
 Docker builds must use the repo root as build context:
 
 ```bash
-docker build -f pinchana-inst/Dockerfile -t pinchana-inst .
+docker build -f pinchana-server/Dockerfile -t pinchana-server .
 ```
 
 ## Releases and Images
 
-Images are published to:
+The gateway and optional DLP images are published to:
 
 ```text
-ghcr.io/pinchana/pinchana-api/<service>:<tag>
+ghcr.io/pinchana/pinchana-api/<server|dlp-api|dlp-orchestrator|dlp-worker>:<tag>
 ```
 
 `VERSION` is the single source of truth for the rolling product release. It uses
@@ -276,20 +298,21 @@ docker compose --env-file .env up --detach
 
 ## Adding a Module
 
-Adding a service requires coordinated changes:
-
-1. Add a new `pinchana-<name>` submodule with `src/pinchana_<name>/main.py`.
-2. Add routing and container metadata in `config/modules.yaml`.
-3. Add services to `docker-compose.yml` and `docker-compose.dev.yml`.
-4. Add ports, endpoints, and container names to `.env.example`.
-5. Add workflow detection and Dockerfile mapping in `.github/workflows/docker-publish.yml`.
+1. Add a package under `pinchana-<name>/` that registers a `ScraperPlugin` with
+   its URL patterns and handlers. Use `pinchana-bluesky/` as a reference.
+2. Add the package and its local path to `pinchana-server/pyproject.toml`. Add it
+   to the module list in `pinchana_server/modules.py`, then refresh the gateway
+   lockfile with `uv lock --project pinchana-server`.
+3. Build the gateway image and test the relevant public and authenticated API
+   routes. The existing gateway port, media cache, and deployment cover new
+   modules.
 
 ## License
 
 MIT. See `LICENSE`.
 
-Apple Music uses the parent-owned `pinchana-apple-music/` package and the
-`apple_music` Compose service on port 8091. Configure `SOCIALCRAWL_API_KEY`
+Apple Music uses the `pinchana-apple-music/` package inside the gateway.
+Configure `SOCIALCRAWL_API_KEY`
 for metadata lookup; audio is matched and downloaded through YouTube Music.
 Only individual tracks are accepted, including album URLs with a selected
 `?i=TRACK_ID`. See [the module guide](pinchana-apple-music/README.md).
@@ -303,8 +326,7 @@ lockfile with `uv lock --upgrade` and install it with `uv sync --frozen`.
 
 DLP accepts full YouTube video URLs only. Apple Music, Spotify, YouTube Music,
 Shorts and playlist pages remain on their own service routes. Starting Compose
-with `--profile dlp` also starts the base scraper services; their presence in the
-container list does not route their traffic through DLP.
+with `--profile dlp` also starts the gateway, which handles these scrapers.
 
 To supply optional operator cookies, put a Netscape cookie file at
 `<DLP_HOST_COOKIES_DIR>/youtube.txt`. The default directory is

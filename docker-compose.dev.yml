@@ -11,17 +11,6 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     ports:
-      - "${API_HOST_PORT:-8080}:8080"                         # Server API
-      - "${TIKTOK_HOST_PORT:-8081}:8081"                     # TikTok scraper
-      - "${INSTAGRAM_HOST_PORT:-8082}:8082"                  # Instagram scraper
-      - "${SHORTS_HOST_PORT:-8083}:8083"                     # YouTube Shorts scraper
-      - "${SOUNDCLOUD_HOST_PORT:-8084}:8084"                 # SoundCloud scraper
-      - "${YTMUSIC_HOST_PORT:-8085}:8085"                    # YouTube Music scraper
-      - "${SPOTIFY_HOST_PORT:-8086}:8086"                    # Spotify scraper
-      - "${DEEZER_HOST_PORT:-8087}:8087"                     # Deezer scraper
-      - "${THREADS_HOST_PORT:-8088}:8088"                     # Threads scraper
-      - "${TWITTER_HOST_PORT:-8089}:8089"                     # Twitter/X scraper
-      - "${COUB_HOST_PORT:-8090}:8090"                         # Coub scraper
       - "${GLUETUN_CONTROL_BIND_ADDRESS:-127.0.0.1}:${GLUETUN_CONTROL_HOST_PORT:-8000}:${GLUETUN_CONTROL_PORT:-8000}"  # Gluetun control server
     environment:
       - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-nordvpn}
@@ -55,17 +44,32 @@ services:
     ports:
       - "${API_HOST_PORT:-8080}:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - scraper-cache:/app/cache
-      - ./config:/app/config:ro
+      - ${SHORTS_COOKIES_DIR:-./secrets/yt-cookies}:/run/pinchana-cookies:ro
+      - threads-browser:/root/.cloakbrowser
     env_file:
       - path: .env
         required: false
     environment:
-      - CONTAINER_MODE=${CONTAINER_MODE:-false}
       - VPN_ENABLED=false
-      - MODULES_CONFIG=/app/config/modules.yaml
       - CACHE_PATH=/app/cache
+      - YTDLP_CONCURRENCY=${YTDLP_CONCURRENCY:-1}
+      - TIKTOK_DIRECT_WEB_PRIMARY=${TIKTOK_DIRECT_WEB_PRIMARY:-false}
+      - TIKTOK_REQUEST_INTERVAL_SECONDS=${TIKTOK_REQUEST_INTERVAL_SECONDS:-2.0}
+      - TIKTOK_INTERNAL_REQUEST_INTERVAL_SECONDS=${TIKTOK_INTERNAL_REQUEST_INTERVAL_SECONDS:-0}
+      - TIKTOK_RETRY_DELAY_SECONDS=${TIKTOK_RETRY_DELAY_SECONDS:-2.0}
+      - TIKTOK_FORMAT_ATTEMPTS=${TIKTOK_FORMAT_ATTEMPTS:-3}
+      - TIKTOK_NORMALIZE_AUDIO=${TIKTOK_NORMALIZE_AUDIO:-true}
+      - TIKTOK_TRANSCODE_HEVC=${TIKTOK_TRANSCODE_HEVC:-false}
+      - TIKTOK_HEVC_TRANSCODE_TIMEOUT_SECONDS=${TIKTOK_HEVC_TRANSCODE_TIMEOUT_SECONDS:-180}
+      - TIKTOK_VPN_ROTATION_COOLDOWN_SECONDS=${TIKTOK_VPN_ROTATION_COOLDOWN_SECONDS:-30}
+      - SOCIALCRAWL_API_KEY=${SOCIALCRAWL_API_KEY:-}
+      - SOCIALCRAWL_TIMEOUT_SECONDS=${SOCIALCRAWL_TIMEOUT_SECONDS:-20}
+      - YTDLP_COOKIES_DIR=/run/pinchana-cookies
+      - SHORTS_MAX_MB_PER_MINUTE=${SHORTS_MAX_MB_PER_MINUTE:-18.0}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
+      - COUB_FFMPEG_TIMEOUT_SECONDS=${COUB_FFMPEG_TIMEOUT_SECONDS:-300}
       - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
       - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
       - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
@@ -96,224 +100,7 @@ services:
       - DLP_URL=http://dlp-api:8080
       - DLP_GATEWAY_TOKEN=${DLP_GATEWAY_TOKEN:-}
       - DLP_OWNER_SECRET=${DLP_OWNER_SECRET:-}
-      - MODULE_TIKTOK_PORT=${MODULE_TIKTOK_PORT:-8081}
-      - MODULE_INSTAGRAM_PORT=${MODULE_INSTAGRAM_PORT:-8082}
-      - MODULE_SHORTS_PORT=${MODULE_SHORTS_PORT:-8083}
-      - MODULE_SOUNDCLOUD_PORT=${MODULE_SOUNDCLOUD_PORT:-8084}
-      - MODULE_YTMUSIC_PORT=${MODULE_YTMUSIC_PORT:-8085}
-      - MODULE_SPOTIFY_PORT=${MODULE_SPOTIFY_PORT:-8086}
-      - MODULE_APPLE_MUSIC_PORT=${MODULE_APPLE_MUSIC_PORT:-8091}
-      - MODULE_DEEZER_PORT=${MODULE_DEEZER_PORT:-8087}
-      - MODULE_THREADS_PORT=${MODULE_THREADS_PORT:-8088}
-      - MODULE_TWITTER_PORT=${MODULE_TWITTER_PORT:-8089}
-      - MODULE_COUB_PORT=${MODULE_COUB_PORT:-8090}
-      - MODULE_TIKTOK_ENDPOINT=${DEV_MODULE_TIKTOK_ENDPOINT:-http://tiktok:8081}
-      - MODULE_INSTAGRAM_ENDPOINT=${DEV_MODULE_INSTAGRAM_ENDPOINT:-http://instagram:8082}
-      - MODULE_SHORTS_ENDPOINT=${DEV_MODULE_SHORTS_ENDPOINT:-http://shorts:8083}
-      - MODULE_SOUNDCLOUD_ENDPOINT=${DEV_MODULE_SOUNDCLOUD_ENDPOINT:-http://soundcloud:8084}
-      - MODULE_YTMUSIC_ENDPOINT=${DEV_MODULE_YTMUSIC_ENDPOINT:-http://ytmusic:8085}
-      - MODULE_SPOTIFY_ENDPOINT=${DEV_MODULE_SPOTIFY_ENDPOINT:-http://spotify:8086}
-      - MODULE_APPLE_MUSIC_ENDPOINT=${DEV_MODULE_APPLE_MUSIC_ENDPOINT:-http://apple_music:8091}
-      - MODULE_DEEZER_ENDPOINT=${DEV_MODULE_DEEZER_ENDPOINT:-http://deezer:8087}
-      - MODULE_THREADS_ENDPOINT=${DEV_MODULE_THREADS_ENDPOINT:-http://threads:8088}
-      - MODULE_TWITTER_ENDPOINT=${DEV_MODULE_TWITTER_ENDPOINT:-http://twitter:8089}
-      - MODULE_COUB_ENDPOINT=${DEV_MODULE_COUB_ENDPOINT:-http://coub:8090}
     networks: [default, dlp-gateway]
-
-  tiktok:
-    build:
-      context: .
-      dockerfile: ./pinchana-tiktok/Dockerfile
-    container_name: ${TIKTOK_CONTAINER_NAME:-pinchana-tiktok-dev}
-    ports:
-      - "${TIKTOK_HOST_PORT:-8081}:8081"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - YTDLP_CONCURRENCY=${YTDLP_CONCURRENCY:-1}
-      - TIKTOK_DIRECT_WEB_PRIMARY=${TIKTOK_DIRECT_WEB_PRIMARY:-false}
-      - TIKTOK_REQUEST_INTERVAL_SECONDS=${TIKTOK_REQUEST_INTERVAL_SECONDS:-2.0}
-      - TIKTOK_INTERNAL_REQUEST_INTERVAL_SECONDS=${TIKTOK_INTERNAL_REQUEST_INTERVAL_SECONDS:-0}
-      - TIKTOK_RETRY_DELAY_SECONDS=${TIKTOK_RETRY_DELAY_SECONDS:-2.0}
-      - TIKTOK_FORMAT_ATTEMPTS=${TIKTOK_FORMAT_ATTEMPTS:-3}
-      - TIKTOK_NORMALIZE_AUDIO=${TIKTOK_NORMALIZE_AUDIO:-true}
-      - TIKTOK_TRANSCODE_HEVC=${TIKTOK_TRANSCODE_HEVC:-false}
-      - TIKTOK_HEVC_TRANSCODE_TIMEOUT_SECONDS=${TIKTOK_HEVC_TRANSCODE_TIMEOUT_SECONDS:-180}
-      - TIKTOK_VPN_ROTATION_COOLDOWN_SECONDS=${TIKTOK_VPN_ROTATION_COOLDOWN_SECONDS:-30}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-
-  instagram:
-    build:
-      context: .
-      dockerfile: ./pinchana-inst/Dockerfile
-    container_name: ${INSTAGRAM_CONTAINER_NAME:-pinchana-inst-dev}
-    ports:
-      - "${INSTAGRAM_HOST_PORT:-8082}:8082"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-      - SOCIALCRAWL_API_KEY=${SOCIALCRAWL_API_KEY:-}
-      - SOCIALCRAWL_TIMEOUT_SECONDS=${SOCIALCRAWL_TIMEOUT_SECONDS:-20}
-
-  shorts:
-    build:
-      context: .
-      dockerfile: ./pinchana-shorts/Dockerfile
-    container_name: ${SHORTS_CONTAINER_NAME:-pinchana-shorts-dev}
-    ports:
-      - "${SHORTS_HOST_PORT:-8083}:8083"
-    volumes:
-      - scraper-cache:/app/cache
-      - ${SHORTS_COOKIES_DIR:-./secrets/yt-cookies}:/run/pinchana-cookies:ro
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-      - YTDLP_COOKIES_DIR=/run/pinchana-cookies
-      - SHORTS_MAX_MB_PER_MINUTE=${SHORTS_MAX_MB_PER_MINUTE:-18.0}
-
-  soundcloud:
-    build:
-      context: .
-      dockerfile: ./pinchana-soundcloud/Dockerfile
-    container_name: ${SOUNDCLOUD_CONTAINER_NAME:-pinchana-soundcloud-dev}
-    ports:
-      - "${SOUNDCLOUD_HOST_PORT:-8084}:8084"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-
-  ytmusic:
-    build:
-      context: .
-      dockerfile: ./pinchana-ytmusic/Dockerfile
-    container_name: ${YTMUSIC_CONTAINER_NAME:-pinchana-ytmusic-dev}
-    ports:
-      - "${YTMUSIC_HOST_PORT:-8085}:8085"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-
-  spotify:
-    build:
-      context: .
-      dockerfile: ./pinchana-spotify/Dockerfile
-    container_name: ${SPOTIFY_CONTAINER_NAME:-pinchana-spotify-dev}
-    ports:
-      - "${SPOTIFY_HOST_PORT:-8086}:8086"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
-      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
-
-  apple_music:
-    build:
-      context: .
-      dockerfile: ./pinchana-apple-music/Dockerfile
-    container_name: ${APPLE_MUSIC_CONTAINER_NAME:-pinchana-apple-music-dev}
-    ports:
-      - "${APPLE_MUSIC_HOST_PORT:-8091}:8091"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-      - SOCIALCRAWL_API_KEY=${SOCIALCRAWL_API_KEY:-}
-      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
-      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
-
-  deezer:
-    build:
-      context: .
-      dockerfile: ./pinchana-deezer/Dockerfile
-    container_name: ${DEEZER_CONTAINER_NAME:-pinchana-deezer-dev}
-    ports:
-      - "${DEEZER_HOST_PORT:-8087}:8087"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-
-  threads:
-    build:
-      context: .
-      dockerfile: ./pinchana-threads/Dockerfile
-    container_name: ${THREADS_CONTAINER_NAME:-pinchana-threads-dev}
-    ports:
-      - "${THREADS_HOST_PORT:-8088}:8088"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-
-  twitter:
-    build:
-      context: .
-      dockerfile: ./pinchana-twitter/Dockerfile
-    container_name: ${TWITTER_CONTAINER_NAME:-pinchana-twitter-dev}
-    ports:
-      - "${TWITTER_HOST_PORT:-8089}:8089"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - GLUETUN_CONTROL_URL=http://localhost:${GLUETUN_CONTROL_PORT:-8000}
-      - GLUETUN_API_KEY=${GLUETUN_API_KEY:-secret-key}
-
-  coub:
-    build:
-      context: .
-      dockerfile: ./pinchana-coub/Dockerfile
-    container_name: ${COUB_CONTAINER_NAME:-pinchana-coub-dev}
-    ports:
-      - "${COUB_HOST_PORT:-8090}:8090"
-    volumes:
-      - scraper-cache:/app/cache
-    environment:
-      - VPN_ENABLED=false
-      - CACHE_PATH=/app/cache
-      - CACHE_MAX_SIZE_GB=${CACHE_MAX_SIZE_GB:-10.0}
-      - COUB_FFMPEG_TIMEOUT_SECONDS=${COUB_FFMPEG_TIMEOUT_SECONDS:-300}
 
   dlp-redis:
     profiles: ["dlp"]
@@ -440,6 +227,7 @@ services:
     entrypoint: ["/bin/true"]
 
 volumes:
+  threads-browser:
   scraper-cache:
   dlp-jobs:
     driver: local
