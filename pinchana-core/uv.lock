@@ -803,7 +803,7 @@ wheels = [
 
 [[package]]
 name = "pinchana-core"
-version = "26.11.8"
+version = "26.11.9"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
