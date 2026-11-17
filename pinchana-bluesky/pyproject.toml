@@ -1,6 +1,6 @@
 [project]
 name = "pinchana-bluesky"
-version = "26.11.10"
+version = "26.11.11"
 description = "Public Bluesky post scraper for Pinchana"
 readme = "README.md"
 requires-python = ">=3.13"
