@@ -17,7 +17,7 @@ from pinchana_core.storage import MediaStorage
 from pinchana_core.video_metadata import duration_seconds, probe_video
 from pinchana_core.vpn import GluetunController, VpnRotationError
 from pinchana_core.youtube_cookies import resolve_cookie_source, runtime_cookiefile
-from yt_dlp import YoutubeDL
+from pinchana_core.ytdlp import ManagedYoutubeDL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ def _download_short(url: str, post_dir: Path) -> tuple[dict, Path | None, Path |
     with runtime_cookiefile() as cookiefile:
         if cookiefile:
             ydl_opts["cookiefile"] = str(cookiefile)
-        with YoutubeDL(ydl_opts) as ydl:
+        with ManagedYoutubeDL(ydl_opts) as ydl:
             info = ydl.sanitize_info(ydl.extract_info(url, download=True))
 
     video_file = _find_downloaded_file(post_dir, "video")

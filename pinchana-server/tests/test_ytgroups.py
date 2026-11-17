@@ -62,7 +62,7 @@ def test_rejected_metadata_never_opens_shared_cookies(monkeypatch, tmp_path, met
     }
     factory = Mock(return_value=downloader)
     cookies = Mock()
-    monkeypatch.setattr(ytgroups, "YoutubeDL", factory)
+    monkeypatch.setattr(ytgroups, "ManagedYoutubeDL", factory)
     monkeypatch.setattr(ytgroups, "runtime_cookiefile", cookies)
     with pytest.raises(HTTPException):
         ytgroups.download_video(VIDEO_ID, tmp_path / "video.mp4")
@@ -102,7 +102,7 @@ def test_confirmed_full_video_opens_shared_cookie_only_on_second_extraction(monk
         Path(command[-1]).write_bytes(b"mp4")
 
     monkeypatch.setattr(ytgroups, "runtime_cookiefile", cookies)
-    monkeypatch.setattr(ytgroups, "YoutubeDL", downloader)
+    monkeypatch.setattr(ytgroups, "ManagedYoutubeDL", downloader)
     monkeypatch.setattr(ytgroups.subprocess, "run", remux)
     video = tmp_path / "video.mp4"
     assert ytgroups.download_video(VIDEO_ID, video) == metadata
@@ -183,7 +183,7 @@ def test_an_oversized_download_retries_below_the_selected_resolution(monkeypatch
         if len(edges) == 1:
             raise ytgroups.OversizedVideo(720)
 
-    monkeypatch.setattr(ytgroups, "YoutubeDL", downloader)
+    monkeypatch.setattr(ytgroups, "ManagedYoutubeDL", downloader)
     monkeypatch.setattr(ytgroups, "save_video", save)
     assert ytgroups.download_video(VIDEO_ID, tmp_path / "video.mp4") == metadata
     assert edges == [1080, 719]
