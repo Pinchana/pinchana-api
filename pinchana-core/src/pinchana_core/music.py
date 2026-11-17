@@ -22,7 +22,7 @@ from typing import Callable, Optional
 
 import aiohttp
 from PIL import Image
-from yt_dlp import YoutubeDL
+from pinchana_core.ytdlp import ManagedYoutubeDL
 
 from .vpn import GluetunController, VpnRotationError
 
@@ -255,7 +255,7 @@ class MusicDownloader:
 
     @staticmethod
     def _run_ytdlp(target: str, opts: dict) -> dict | None:
-        with YoutubeDL(opts) as ydl:
+        with ManagedYoutubeDL(opts) as ydl:
             return ydl.sanitize_info(ydl.extract_info(target, download=True))
 
     # ------------------------------------------------------------------

@@ -18,6 +18,8 @@ from pinchana_core.storage import MediaStorage
 from pinchana_core.vpn import GluetunController
 from pinchana_core.youtube_cookies import runtime_cookiefile
 from yt_dlp import YoutubeDL
+
+from pinchana_core.ytdlp import ManagedYoutubeDL
 from yt_dlp.utils import DownloadError
 
 
@@ -130,7 +132,7 @@ def download_video(identifier: str, destination: Path) -> dict:
 
     try:
         # Only an anonymous check can authorize opening the operator cookie file.
-        with YoutubeDL({**YDL_OPTIONS, "ignore_no_formats_error": True}) as anonymous:
+        with ManagedYoutubeDL({**YDL_OPTIONS, "ignore_no_formats_error": True}) as anonymous:
             metadata = require_full_video(anonymous.extract_info(canonical, download=False, process=False), identifier)
         max_edge = RESOLUTION_LIMITS[0][0]
         while max_edge > 0:
@@ -186,7 +188,7 @@ def save_video(canonical: str, metadata: dict, destination: Path, deadline: floa
             }
             if cookies:
                 options["cookiefile"] = str(cookies)
-            with YoutubeDL(options) as ydl:
+            with ManagedYoutubeDL(options) as ydl:
                 # Recheck the same item's visibility before downloading any authenticated streams.
                 info = require_full_video(ydl.extract_info(canonical, download=False, process=False), metadata["id"])
                 ydl.process_ie_result(info, download=True)

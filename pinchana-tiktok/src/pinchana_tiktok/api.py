@@ -8,6 +8,7 @@ import os
 import re
 import threading
 import time
+from contextlib import closing
 from http.cookiejar import Cookie
 from typing import Iterator
 from urllib.parse import urljoin, urlsplit
@@ -15,6 +16,8 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import ExtractorError
+
+from pinchana_core.ytdlp import ManagedYoutubeDL
 
 from .extractor import TikTokIE, TikTokLiveIE, TikTokUserIE
 
@@ -194,8 +197,11 @@ class TikTokScraper:
             "extractor_args": extractor_args,
             **ydl_opts,
         }
-        self._ydl = YoutubeDL(self._ydl_opts)
+        self._ydl = ManagedYoutubeDL(self._ydl_opts)
         self._session_cache.restore(self._ydl)
+
+    def close(self) -> None:
+        self._ydl.close()
 
     def extract_video(self, url: str) -> dict:
         """Extract metadata for a single TikTok video or photo post.
@@ -348,24 +354,44 @@ class TikTokScraper:
 
 def extract_video(url: str, **ydl_opts) -> dict:
     """One-shot video extraction."""
-    return TikTokScraper(**ydl_opts).extract_video(url)
+    with closing(TikTokScraper(**ydl_opts)) as scraper:
+        return scraper.extract_video(url)
 
 
 def extract_user(url: str, **ydl_opts) -> dict:
     """One-shot user playlist extraction."""
-    return TikTokScraper(**ydl_opts).extract_user(url)
+    scraper = TikTokScraper(**ydl_opts)
+    try:
+        playlist = scraper.extract_user(url)
+    except BaseException:
+        scraper.close()
+        raise
+    entries = playlist.get("entries")
+    if entries is None or isinstance(entries, (list, tuple)):
+        scraper.close()
+    else:
+        # The lazy extractor still needs the same downloader while iterating.
+        def iter_entries():
+            with closing(scraper):
+                yield from entries
+
+        playlist["entries"] = iter_entries()
+    return playlist
 
 
 def extract_user_videos(url: str, **ydl_opts) -> Iterator[dict]:
     """One-shot user video generator."""
-    yield from TikTokScraper(**ydl_opts).extract_user_videos(url)
+    with closing(TikTokScraper(**ydl_opts)) as scraper:
+        yield from scraper.extract_user_videos(url)
 
 
 def extract_live(url: str, **ydl_opts) -> dict:
     """One-shot livestream extraction."""
-    return TikTokScraper(**ydl_opts).extract_live(url)
+    with closing(TikTokScraper(**ydl_opts)) as scraper:
+        return scraper.extract_live(url)
 
 
 def resolve_short_url(url: str, **ydl_opts) -> str:
     """One-shot short URL resolution."""
-    return TikTokScraper(**ydl_opts).resolve_short_url(url)
+    with closing(TikTokScraper(**ydl_opts)) as scraper:
+        return scraper.resolve_short_url(url)

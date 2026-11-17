@@ -82,6 +82,31 @@ async def test_upstream_runner_paces_job_starts():
     assert starts[1] - starts[0] >= 0.02
 
 
+@pytest.mark.asyncio
+async def test_cancelled_attempt_waits_for_its_downloader_thread():
+    runner = main.TikTokUpstreamRunner(concurrency=1, interval=0)
+    started = asyncio.Event()
+    release = threading.Event()
+    loop = asyncio.get_running_loop()
+
+    def work():
+        loop.call_soon_threadsafe(started.set)
+        return release.wait(2)
+
+    task = asyncio.create_task(runner.run(work))
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        assert runner._limit.locked()
+    finally:
+        release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, 1)
+    assert not runner._limit.locked()
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -193,6 +218,9 @@ async def test_short_resolution_and_extraction_are_one_paced_job(monkeypatch, sh
             return function(*args)
 
     class Scraper:
+        def close(self):
+            pass
+
         _ydl = YoutubeDL({"quiet": True, "no_warnings": True})
 
         def resolve_short_url(self, url):

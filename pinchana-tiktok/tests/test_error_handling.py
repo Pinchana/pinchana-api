@@ -11,6 +11,9 @@ async def test_login_gated_post_fails_once_without_vpn_rotation(monkeypatch):
     rotations = 0
 
     class Scraper:
+        def close(self):
+            pass
+
         def extract_video(self, _url):
             nonlocal attempts
             attempts += 1
@@ -56,10 +59,16 @@ async def test_rate_limit_retries_fresh_session_then_reconnects_once(
     attempts = 0
     rotations = 0
     cache_clears = 0
+    closes = 0
 
     class Scraper:
+        def close(self):
+            nonlocal closes
+            closes += 1
+
         def extract_video(self, _url):
             nonlocal attempts
+            assert closes == attempts
             attempts += 1
             raise RuntimeError(message)
 
@@ -87,6 +96,7 @@ async def test_rate_limit_retries_fresh_session_then_reconnects_once(
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail["code"] == "rate_limited"
     assert attempts == expected_attempts
+    assert closes == expected_attempts
     assert rotations == 1
     assert cache_clears == expected_cache_clears
 
@@ -97,6 +107,9 @@ async def test_challenge_failure_retries_fresh_session_before_vpn(monkeypatch):
     rotations = 0
 
     class Scraper:
+        def close(self):
+            pass
+
         def extract_video(self, _url):
             nonlocal attempts
             attempts += 1
@@ -190,6 +203,9 @@ async def test_media_403_refreshes_urls_before_vpn_rotation(monkeypatch):
     rotations = 0
 
     class Scraper:
+        def close(self):
+            pass
+
         def extract_video(self, _url):
             nonlocal extractions
             extractions += 1
@@ -238,6 +254,9 @@ async def test_transport_failure_retries_without_rotation(monkeypatch):
     rotations = 0
 
     class Scraper:
+        def close(self):
+            pass
+
         def extract_video(self, _url):
             nonlocal attempts
             attempts += 1
@@ -266,6 +285,9 @@ async def test_transport_failure_retries_without_rotation(monkeypatch):
 @pytest.mark.asyncio
 async def test_oembed_not_found_disambiguates_missing_web_data(monkeypatch):
     class Scraper:
+        def close(self):
+            pass
+
         def extract_video(self, _url):
             raise RuntimeError("Unable to extract universal data for rehydration")
 

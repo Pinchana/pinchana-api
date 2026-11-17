@@ -315,6 +315,9 @@ async def test_video_download_tries_alternate_format_in_same_session(
 @pytest.mark.asyncio
 async def test_watermarked_only_scrape_returns_extraction_failure(monkeypatch, tmp_path):
     class Scraper:
+        def close(self):
+            pass
+
         def extract_video(self, _url):
             return {
                 "id": "123",
@@ -374,6 +377,9 @@ async def test_incomplete_carousel_is_retryable_and_not_cached(monkeypatch, tmp_
         return _info
 
     class Scraper:
+        def close(self):
+            pass
+
         def extract_video(self, _url):
             return {
                 "_type": "playlist",
@@ -423,6 +429,9 @@ def test_audio_file_mislabeled_as_video_is_not_a_cache_hit(tmp_path, monkeypatch
 async def test_audio_only_upstream_is_refreshed_before_video_download(tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
     class Scraper:
+        def close(self):
+            pass
+
         calls = 0
         _ydl = YoutubeDL({"quiet": True, "no_warnings": True})
         def extract_video(self, url):

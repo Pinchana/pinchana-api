@@ -6,7 +6,7 @@ import os
 import re
 import logging
 import time
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, suppress
 from pathlib import Path
 from urllib.parse import urlsplit
 import httpx
@@ -60,7 +60,14 @@ class TikTokUpstreamRunner:
                     if delay > 0:
                         await asyncio.sleep(delay)
                     self._last_started = time.monotonic()
-            return await asyncio.to_thread(function, *args)
+            work = asyncio.create_task(asyncio.to_thread(function, *args))
+            try:
+                return await asyncio.shield(work)
+            except asyncio.CancelledError:
+                # The thread still owns the downloader after its caller is cancelled.
+                with suppress(Exception):
+                    await work
+                raise
 
 
 UPSTREAM_RUNNER = TikTokUpstreamRunner(
@@ -910,6 +917,15 @@ async def _download_and_build_response(video_id: str, info: dict, scraper: TikTo
     return response
 
 
+@asynccontextmanager
+async def _scraper_session():
+    scraper = TikTokScraper()
+    try:
+        yield scraper
+    finally:
+        await asyncio.to_thread(scraper.close)
+
+
 async def _process_scrape_request(request: ScrapeRequest):
     url = canonicalize_tiktok_url(str(request.url))
     video_id = None
@@ -920,42 +936,42 @@ async def _process_scrape_request(request: ScrapeRequest):
     job_paced = False
 
     for attempt in range(1, TIKTOK_MAX_ATTEMPTS + 1):
-        scraper = TikTokScraper()
         try:
-            if is_short_tiktok_url(url):
-                short_url = url
+            async with _scraper_session() as scraper:
+                if is_short_tiktok_url(url):
+                    short_url = url
+                    try:
+                        url = await UPSTREAM_RUNNER.run(
+                            scraper.resolve_short_url,
+                            url,
+                            pace=not job_paced,
+                        )
+                        job_paced = True
+                    except Exception as e:
+                        raise _request_error("short_url", e, url=short_url) from e
+                    url = canonicalize_tiktok_url(url)
+
+                if video_id is None:
+                    video_id = extract_video_id(url)
+
+                if storage.is_cached(video_id):
+                    cached = storage.load_metadata(video_id)
+                    if cached and _cached_media_ready(cached):
+                        logger.info("Cache hit for %s", video_id)
+                        return ScrapeResponse(**cached)
+                    logger.info("Cache invalid for %s, missing media; re-scraping", video_id)
+
+                logger.info(f"Scraping TikTok: {video_id} (attempt {attempt})")
                 try:
-                    url = await UPSTREAM_RUNNER.run(
-                        scraper.resolve_short_url,
+                    info = await UPSTREAM_RUNNER.run(
+                        scraper.extract_video,
                         url,
                         pace=not job_paced,
                     )
                     job_paced = True
                 except Exception as e:
-                    raise _request_error("short_url", e, url=short_url) from e
-                url = canonicalize_tiktok_url(url)
-
-            if video_id is None:
-                video_id = extract_video_id(url)
-
-            if storage.is_cached(video_id):
-                cached = storage.load_metadata(video_id)
-                if cached and _cached_media_ready(cached):
-                    logger.info("Cache hit for %s", video_id)
-                    return ScrapeResponse(**cached)
-                logger.info("Cache invalid for %s, missing media; re-scraping", video_id)
-
-            logger.info(f"Scraping TikTok: {video_id} (attempt {attempt})")
-            try:
-                info = await UPSTREAM_RUNNER.run(
-                    scraper.extract_video,
-                    url,
-                    pace=not job_paced,
-                )
-                job_paced = True
-            except Exception as e:
-                raise _request_error("webpage", e, url=url) from e
-            return await _download_and_build_response(video_id, info, scraper)
+                    raise _request_error("webpage", e, url=url) from e
+                return await _download_and_build_response(video_id, info, scraper)
         except HTTPException:
             raise
         except Exception as e:

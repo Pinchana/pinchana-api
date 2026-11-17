@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException
-from yt_dlp import YoutubeDL
+from pinchana_core.ytdlp import ManagedYoutubeDL
 
 from pinchana_core.models import ScrapeRequest, ScrapeResponse, TrackItem
 from pinchana_core.music import MusicDownloader, MusicDownloadError, RateLimitError
@@ -82,7 +82,7 @@ class SoundCloudDownloader(MusicDownloader):
 
     @staticmethod
     def _extract_info(url: str, opts: dict):
-        with YoutubeDL(opts) as ydl:
+        with ManagedYoutubeDL(opts) as ydl:
             return ydl.sanitize_info(ydl.extract_info(url, download=False))
 
 
