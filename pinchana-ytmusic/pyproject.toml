@@ -1,6 +1,6 @@
 [project]
 name = "pinchana-ytmusic"
-version = "26.11.10"
+version = "26.11.11"
 description = "YouTube Music downloader for Pinchana"
 readme = "README.md"
 requires-python = ">=3.13"
