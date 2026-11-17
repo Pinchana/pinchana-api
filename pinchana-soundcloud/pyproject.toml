@@ -1,6 +1,6 @@
 [project]
 name = "pinchana-soundcloud"
-version = "26.11.11"
+version = "26.11.12"
 description = "SoundCloud music downloader for Pinchana"
 readme = "README.md"
 requires-python = ">=3.13"
