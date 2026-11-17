@@ -23,7 +23,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import httpx
@@ -835,6 +835,12 @@ def _reset_forward_client() -> None:
 
 
 app = FastAPI(title="Pinchana Server", version=_public_build_version(), lifespan=lifespan)
+ROOT_PAGE = Path(__file__).with_name("index.html").read_text(encoding="utf-8")
+
+
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
+async def index():
+    return HTMLResponse(ROOT_PAGE)
 
 
 def _is_v1_request(request: Request) -> bool:
