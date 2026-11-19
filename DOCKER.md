@@ -20,8 +20,9 @@ On the first update from the multi-container scraper stack, add
 `--profile dlp` if that project already runs DLP. The existing media volume is
 reused.
 
-The rolling updater pins both Pinchana release images and Gluetun's stable `v3`
-channel by digest. It deliberately does not consume Gluetun's edge `latest` tag.
+The rolling updater pins Pinchana release images and the main Gluetun image
+from the `latest` development channel by digest. With `--dlp`, it pins the
+dedicated DLP Gluetun image from the stable `v3` channel.
 Gluetun uses its encrypted DNS proxy with Cloudflare only; Compose supplies
 `1.1.1.1` and `1.0.0.1` for bootstrap and health fallback. Google resolvers are
 not used. Its authenticated control API binds to `127.0.0.1` on the Docker host

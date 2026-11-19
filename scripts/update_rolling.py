@@ -24,7 +24,7 @@ DLP_IMAGES = {
     "DLP_WORKER_IMAGE": "ghcr.io/pinchana/pinchana-api/dlp-worker",
 }
 EXTERNAL_IMAGES = {
-    "GLUETUN_IMAGE": ("qmcgaw/gluetun", "v3"),
+    "GLUETUN_IMAGE": ("qmcgaw/gluetun", "latest"),
 }
 DLP_EXTERNAL_IMAGES = {
     "DLP_VPN_IMAGE": ("qmcgaw/gluetun", "v3"),

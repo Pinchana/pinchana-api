@@ -1,6 +1,6 @@
 services:
   gluetun:
-    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:v3}
+    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:latest}
     container_name: ${GLUETUN_CONTAINER_NAME:-gluetun}
     dns:
       - 1.1.1.1

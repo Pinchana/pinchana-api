@@ -50,7 +50,8 @@ class UpdateRollingTests(unittest.TestCase):
             return update_rolling.ImagePin(name, tag, f"{repository}@sha256:external")
 
         with tempfile.NamedTemporaryFile("w", encoding="utf-8") as env_file:
-            env_file.write("GLUETUN_IMAGE=qmcgaw/gluetun:latest\n")
+            digest = "sha256:" + "b" * 64
+            env_file.write(f"GLUETUN_IMAGE=qmcgaw/gluetun@{digest}\n")
             env_file.flush()
             argv = ["update_rolling.py", "--env-file", env_file.name, "--dry-run"]
             with (
@@ -64,17 +65,17 @@ class UpdateRollingTests(unittest.TestCase):
 
         self.assertEqual(
             observed_external,
-            [("GLUETUN_IMAGE", "qmcgaw/gluetun", "v3")],
+            [("GLUETUN_IMAGE", "qmcgaw/gluetun", "latest")],
         )
 
     def test_dlp_flag_updates_dedicated_gluetun(self):
-        observed_names = []
+        observed_external = []
 
         def release_pin(name, repository):
             return update_rolling.ImagePin(name, "26.09.2", f"{repository}@sha256:release")
 
         def external_pin(name, repository, tag):
-            observed_names.append(name)
+            observed_external.append((name, tag))
             return update_rolling.ImagePin(name, tag, f"{repository}@sha256:external")
 
         with tempfile.NamedTemporaryFile("w", encoding="utf-8") as env_file:
@@ -99,7 +100,10 @@ class UpdateRollingTests(unittest.TestCase):
             ):
                 self.assertEqual(update_rolling.main(), 0)
 
-        self.assertEqual(observed_names, ["GLUETUN_IMAGE", "DLP_VPN_IMAGE"])
+        self.assertEqual(
+            observed_external,
+            [("GLUETUN_IMAGE", "latest"), ("DLP_VPN_IMAGE", "v3")],
+        )
 
 
 if __name__ == "__main__":

@@ -105,11 +105,10 @@ docker compose --env-file .env up --detach
 ```
 
 This is the supported production update path. It discovers the newest coherent
-CalVer release through the rolling `stable` channel, resolves Gluetun's stable
-`v3` release channel, and atomically stores immutable image digests in `.env`. By
-default it updates the gateway image and Gluetun. Add `--dlp` to
-include all three DLP images and its dedicated Gluetun image; without that flag,
-DLP values are untouched.
+CalVer release through the rolling `stable` channel, resolves the main Gluetun
+image from the `latest` development channel, and atomically stores immutable
+image digests in `.env`. Add `--dlp` to include all three DLP images and its
+dedicated Gluetun image from the stable `v3` channel.
 
 When upgrading from the per-scraper Compose stack, pin the first release with
 the bundled gateway, then recreate the stack with `--remove-orphans` to remove
