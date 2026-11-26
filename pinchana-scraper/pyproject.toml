@@ -1,6 +1,6 @@
 [project]
 name = "pinchana-scraper"
-version = "26.11.16"
+version = "26.11.17"
 description = "One Python package for importing all Pinchana scrapers"
 readme = "README.md"
 requires-python = ">=3.13"

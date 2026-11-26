@@ -862,7 +862,7 @@ wheels = [
 
 [[package]]
 name = "pinchana-core"
-version = "26.11.16"
+version = "26.11.17"
 source = { directory = "../../pinchana-core" }
 dependencies = [
     { name = "aiohttp" },
@@ -891,7 +891,7 @@ requires-dist = [
 
 [[package]]
 name = "pinchana-deezer"
-version = "26.11.16"
+version = "26.11.17"
 source = { editable = "." }
 dependencies = [
     { name = "deezer-python" },
