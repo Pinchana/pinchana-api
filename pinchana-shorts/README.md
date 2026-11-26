@@ -27,6 +27,8 @@ External clients should call the gateway's authenticated `POST /v1/scrape` route
 
 Mount the host cookie directory read-only and exclude it from version control. The service copies the selected file to a temporary writable location for yt-dlp and removes that copy after the request.
 
+Age-restricted Shorts require a valid session from a YouTube account that can play the video. If YouTube requires age verification, the scraper returns HTTP 403. The `cookies_available` health field indicates whether a cookie file is present. If yt-dlp reports that YouTube rotated the cookies, [export a fresh session using yt-dlp's instructions](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies) and replace the mounted file.
+
 ## Development
 
 ```sh

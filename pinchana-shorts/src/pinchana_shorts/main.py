@@ -18,6 +18,7 @@ from pinchana_core.video_metadata import duration_seconds, probe_video
 from pinchana_core.vpn import GluetunController, VpnRotationError
 from pinchana_core.youtube_cookies import resolve_cookie_source, runtime_cookiefile
 from pinchana_core.ytdlp import ManagedYoutubeDL
+from yt_dlp.utils import DownloadError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -144,7 +145,19 @@ def _download_short(url: str, post_dir: Path) -> tuple[dict, Path | None, Path |
         if cookiefile:
             ydl_opts["cookiefile"] = str(cookiefile)
         with ManagedYoutubeDL(ydl_opts) as ydl:
-            info = ydl.sanitize_info(ydl.extract_info(url, download=True))
+            try:
+                info = ydl.sanitize_info(ydl.extract_info(url, download=True))
+            except DownloadError as exc:
+                message = str(exc).lower()
+                if any(reason in message for reason in (
+                    "confirm your age", "verify your age", "age-restricted",
+                    "age verification", "age-verification",
+                )):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="YouTube requires an age-verified account to access this video",
+                    ) from exc
+                raise
 
     video_file = _find_downloaded_file(post_dir, "video")
     thumb_file = _find_downloaded_file(post_dir, "thumbnail")
