@@ -1,6 +1,6 @@
 [project]
 name = "pinchana-ytgroups"
-version = "26.11.14"
+version = "26.11.15"
 description = "Optimized YouTube videos for Pinchana Telegram groups"
 readme = "README.md"
 requires-python = ">=3.13"
