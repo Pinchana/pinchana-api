@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/)
+[![PyPI](https://img.shields.io/pypi/v/pinchana-scraper)](https://pypi.org/project/pinchana-scraper/)
 [![Publish Docker images](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml)
 
 Pinchana extracts media and metadata from 13 scraper integrations. Use
@@ -10,20 +11,30 @@ scrape requests and cached media over HTTP.
 
 [Python API](#python-api) · [Docker gateway](#run-the-http-gateway) · [Supported modules](#supported-modules) · [Development](#development)
 
-## Get the source
-
-```sh
-git clone https://github.com/Pinchana/pinchana-api.git
-cd pinchana-api
-```
-
 ## Python API
 
-The `pinchana-scraper` bundle gives you one import namespace for all 13
-scrapers. Python loads each scraper when you import it. You can also install
-individual scraper packages. [Bundle guide](pinchana-scraper/README.md)
+### Install from PyPI
 
-Save this as `example.py` and replace `VIDEO_ID` with a YouTube Shorts ID.
+Use Python 3.13 or newer. Install the bundle for all 13 scrapers under the
+`pinchana_scraper` namespace. Python loads each scraper when you import it.
+
+```sh
+python -m pip install pinchana-scraper
+```
+
+Install an individual package when you only need one platform. For example,
+install `pinchana-shorts` and use `from pinchana_shorts import scrape`.
+The [supported modules table](#supported-modules) has the command and import
+name for each scraper.
+
+```sh
+python -m pip install pinchana-shorts
+```
+
+### Scrape from Python
+
+This example uses the bundle. Save it as `example.py` and replace `VIDEO_ID`
+with a YouTube Shorts ID. [Bundle guide](pinchana-scraper/README.md)
 
 ```python
 import asyncio
@@ -43,11 +54,11 @@ async def main():
 asyncio.run(main())
 ```
 
-Run it from the repository root with Python 3.13+ and `uv`. Set
-`VPN_ENABLED=false` before importing a scraper when running outside Gluetun.
+Set `VPN_ENABLED=false` before importing a scraper when running outside
+Gluetun.
 
 ```sh
-VPN_ENABLED=false uv run --project pinchana-scraper --locked python example.py
+VPN_ENABLED=false python example.py
 ```
 
 - Use `from pinchana_scraper.shorts import scrape` to import the function directly.
@@ -67,11 +78,13 @@ VPN_ENABLED=false uv run --project pinchana-scraper --locked python example.py
 A single FastAPI process calls the bundled scrapers directly. The gateway
 serves the API and cached media on port `8080` by default.
 
-For a new checkout, copy the sample configuration and replace the placeholder in
-`PINCHANA_API_KEYS`. Give each machine client its own named key so you can
-revoke it independently. [Configuration example](.env.example)
+Clone the repository for the Compose files, then copy the sample configuration
+and replace the placeholder in `PINCHANA_API_KEYS`. Give each machine client its
+own named key so you can revoke it independently. [Configuration example](.env.example)
 
 ```sh
+git clone https://github.com/Pinchana/pinchana-api.git
+cd pinchana-api
 cp .env.example .env
 chmod 600 .env
 ```
@@ -190,21 +203,21 @@ first when present. [Shorts cookies](scrapers/pinchana-shorts/README.md#configur
 
 ## Supported modules
 
-| Scraper | Python import from `pinchana_scraper` | Typical URLs |
-| --- | --- | --- |
-| [Apple Music](scrapers/pinchana-apple-music/README.md) | `apple_music` | `music.apple.com`, individual tracks |
-| [Bluesky](scrapers/pinchana-bluesky/README.md) | `bluesky` | `bsky.app/profile/<handle-or-did>/post/<id>` |
-| [Coub](scrapers/pinchana-coub/README.md) | `coub` | `coub.com/view/…`, `coub.com/embed/…` |
-| [Deezer](scrapers/pinchana-deezer/README.md) | `deezer` | `deezer.com` and Deezer share links |
-| [Instagram](scrapers/pinchana-inst/README.md) | `instagram` | `instagram.com`, `instagr.am` |
-| [SoundCloud](scrapers/pinchana-soundcloud/README.md) | `soundcloud` | `soundcloud.com`, `on.soundcloud.com` |
-| [Spotify](scrapers/pinchana-spotify/README.md) | `spotify` | `open.spotify.com` |
-| [Threads](scrapers/pinchana-threads/README.md) | `threads` | `threads.net`, `threads.com` |
-| [TikTok](scrapers/pinchana-tiktok/README.md) | `tiktok` | `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`, `tt.site` |
-| [X / Twitter](scrapers/pinchana-twitter/README.md) | `twitter` | `x.com`, `twitter.com`, share links via the gateway |
-| [YouTube groups](scrapers/pinchana-ytgroups/README.md) | `ytgroups` | `youtube.com/watch`, `youtu.be` via the Telegram gateway endpoint |
-| [YouTube Music](scrapers/pinchana-ytmusic/README.md) | `ytmusic` | `music.youtube.com` |
-| [YouTube Shorts](scrapers/pinchana-shorts/README.md) | `shorts` | `youtube.com/shorts/…` |
+| Scraper | Install individually | Individual import | Bundle import | Typical URLs |
+| --- | --- | --- | --- | --- |
+| [Apple Music](scrapers/pinchana-apple-music/README.md) | `pip install pinchana-apple-music` | `pinchana_apple_music` | `apple_music` | `music.apple.com`, individual tracks |
+| [Bluesky](scrapers/pinchana-bluesky/README.md) | `pip install pinchana-bluesky` | `pinchana_bluesky` | `bluesky` | `bsky.app/profile/<handle-or-did>/post/<id>` |
+| [Coub](scrapers/pinchana-coub/README.md) | `pip install pinchana-coub` | `pinchana_coub` | `coub` | `coub.com/view/…`, `coub.com/embed/…` |
+| [Deezer](scrapers/pinchana-deezer/README.md) | `pip install pinchana-deezer` | `pinchana_deezer` | `deezer` | `deezer.com` and Deezer share links |
+| [Instagram](scrapers/pinchana-inst/README.md) | `pip install pinchana-inst` | `pinchana_inst` | `instagram` | `instagram.com`, `instagr.am` |
+| [SoundCloud](scrapers/pinchana-soundcloud/README.md) | `pip install pinchana-soundcloud` | `pinchana_soundcloud` | `soundcloud` | `soundcloud.com`, `on.soundcloud.com` |
+| [Spotify](scrapers/pinchana-spotify/README.md) | `pip install pinchana-spotify` | `pinchana_spotify` | `spotify` | `open.spotify.com` |
+| [Threads](scrapers/pinchana-threads/README.md) | `pip install pinchana-threads` | `pinchana_threads` | `threads` | `threads.net`, `threads.com` |
+| [TikTok](scrapers/pinchana-tiktok/README.md) | `pip install pinchana-tiktok` | `pinchana_tiktok` | `tiktok` | `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`, `tt.site` |
+| [X / Twitter](scrapers/pinchana-twitter/README.md) | `pip install pinchana-twitter` | `pinchana_twitter` | `twitter` | `x.com`, `twitter.com`, share links via the gateway |
+| [YouTube groups](scrapers/pinchana-ytgroups/README.md) | `pip install pinchana-ytgroups` | `pinchana_ytgroups` | `ytgroups` | `youtube.com/watch`, `youtu.be` via the Telegram gateway endpoint |
+| [YouTube Music](scrapers/pinchana-ytmusic/README.md) | `pip install pinchana-ytmusic` | `pinchana_ytmusic` | `ytmusic` | `music.youtube.com` |
+| [YouTube Shorts](scrapers/pinchana-shorts/README.md) | `pip install pinchana-shorts` | `pinchana_shorts` | `shorts` | `youtube.com/shorts/…` |
 
 ## Development
 
@@ -250,7 +263,9 @@ instructions in the [Docker guide](DOCKER.md).
 ## Releases
 
 `VERSION` uses `YY.MM.ITERATION`. The release script keeps Python package
-versions and lockfiles in sync.
+versions and lockfiles in sync. Publishing a stable GitHub Release uploads
+all Python packages to PyPI. Pushing its tag builds the gateway and DLP
+images on GHCR.
 
 | Channel | GHCR tags |
 | --- | --- |

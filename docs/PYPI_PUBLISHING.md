@@ -1,8 +1,9 @@
 # Publishing Pinchana packages to PyPI
 
 The PyPI workflow builds the shared core, platform scrapers, and Python bundle
-from a release tag. Run it manually for each batch. The gateway is released
-through GHCR.
+from a release tag. Publishing a stable GitHub Release starts an upload of
+all packages on the default branch. The bundle uploads after the core and
+platform packages. The gateway is released through GHCR.
 
 ## Register the Trusted Publishers
 
@@ -43,26 +44,18 @@ On GitHub, the matching repository environments must allow deployments from
 `main`, since the workflow runs from `main` and builds the source at the
 selected tag. [GitHub environments](https://github.com/Pinchana/pinchana-api/settings/environments)
 
-## Build and publish the first release
+## Publish selected packages or retry a release
 
-1. Land the packages and publishing workflow on `main`, then create a fresh
-   release tag using the repository release process. Use the same tag for
-   every batch of the first PyPI release. [Tagging a release](RELEASING.md)
+1. Use an existing release tag whose commit is on `main`.
+   [Tagging a release](RELEASING.md)
 2. In GitHub Actions, open **Publish Python packages to PyPI** and select
    **Run workflow** on `main`. Enter the tag and the exact project names as a
    comma-separated list. Leave **publish** unchecked for a build-only run.
    The workflow saves the checked wheels and source archives in
    `pypi-distributions`.
-3. Run the workflow again with **publish** checked for `pinchana-core`.
-   Confirm its release on PyPI before publishing the platform scrapers.
-4. Publish the other registered projects, then register the next batch in
-   the slots freed by the uploads. Publish `pinchana-scraper` after all 13
-   platform scrapers and the core are available at the release version.
-
-For later releases, select `all` once all publishers are active. Start a new
-run with just the unsuccessful projects if a batch partly succeeds. If a
-project already has one distribution file for that tag, select **resume**
-to upload the missing file for the same release.
+3. Check **publish** to upload the selected projects. Use `all` for the full
+   release. To retry a partial upload, select the unsuccessful projects and
+   check **resume** to skip files already on PyPI.
 
 ## Build locally
 

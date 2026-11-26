@@ -21,7 +21,8 @@ python scripts/version.py bump --publish -n "Describe the release here"
    and pushes the current branch.
 4. With `--publish`, creates the matching annotated local tag, pushes it, and
    creates a GitHub Release through `gh`. The tag push triggers the Docker
-   release workflow.
+   release workflow. Publishing the stable GitHub Release triggers PyPI
+   publishing for all Python packages.
 
 Use a description file for multiline notes:
 
@@ -83,5 +84,6 @@ is used.
 
 ## Python packages
 
-The PyPI workflow publishes the core, platform scrapers, and Python bundle in
-manually selected batches. [PyPI publishing and Trusted Publisher setup](PYPI_PUBLISHING.md)
+Stable releases publish the core, platform scrapers, and Python bundle
+automatically. Use a manual run for a build check, a selected package set, or
+a partial-release retry. [PyPI publishing and Trusted Publisher setup](PYPI_PUBLISHING.md)

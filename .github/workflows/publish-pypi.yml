@@ -1,6 +1,8 @@
 name: Publish Python packages to PyPI
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -25,14 +27,32 @@ permissions:
   contents: read
 
 concurrency:
-  group: pypi-${{ inputs.release_tag }}
+  group: ${{ github.event_name == 'release' && 'pypi-release' || 'pypi-build' }}-${{ github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
 
 jobs:
+  dispatch:
+    name: Start PyPI publishing on the default branch
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch all packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh workflow run publish-pypi.yml --repo "$GITHUB_REPOSITORY" --ref "$DEFAULT_BRANCH" \
+            -f "release_tag=$RELEASE_TAG" -f projects=all -f publish=true
+
   build:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.distributions.outputs.matrix }}
+      packages: ${{ steps.distributions.outputs.packages }}
+      bundle: ${{ steps.distributions.outputs.bundle }}
     steps:
       - name: Validate tag format
         env:
@@ -69,7 +89,10 @@ jobs:
           matrix=$(python scripts/build_pypi.py \
             --tag "$RELEASE_TAG" --projects "$PYPI_PROJECTS" --out-dir dist/pypi)
           uvx twine check --strict dist/pypi/*/*.whl dist/pypi/*/*.tar.gz
-          printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+          jq -r '"packages=\(.include |= map(select(.project != "pinchana-scraper")) | tojson)"' \
+            <<< "$matrix" >> "$GITHUB_OUTPUT"
+          jq -r '"bundle=\(any(.include[]; .project == "pinchana-scraper"))"' \
+            <<< "$matrix" >> "$GITHUB_OUTPUT"
 
       - name: Store distributions
         uses: actions/upload-artifact@v7
@@ -80,12 +103,15 @@ jobs:
 
   publish:
     needs: build
-    if: inputs.publish && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: >-
+      inputs.publish &&
+      fromJSON(needs.build.outputs.packages).include[0] != null &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     name: Publish ${{ matrix.project }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.build.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.build.outputs.packages) }}
     environment:
       name: ${{ matrix.environment }}
       url: https://pypi.org/project/${{ matrix.project }}/
@@ -102,4 +128,31 @@ jobs:
         uses: pypa/gh-action-pypi-publish@v1.14.3
         with:
           packages-dir: dist/${{ matrix.project }}/
+          skip-existing: ${{ inputs.resume }}
+
+  publish-bundle:
+    needs: [build, publish]
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped') &&
+      needs.build.outputs.bundle == 'true' && inputs.publish &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    name: Publish pinchana-scraper
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi-pinchana-scraper
+      url: https://pypi.org/project/pinchana-scraper/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: pypi-distributions
+          path: dist/
+
+      - name: Upload the bundle to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.14.3
+        with:
+          packages-dir: dist/pinchana-scraper/
           skip-existing: ${{ inputs.resume }}
