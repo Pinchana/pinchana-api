@@ -96,11 +96,12 @@ def immutable_reference(repository: str, metadata: dict[str, object], reference:
     return f"{repository}@{digests.pop()}"
 
 
-def resolve_pin(name: str, repository: str) -> ImagePin:
-    rolling = f"{repository}:stable"
-    print(f"Discovering {name} from {rolling} ...", flush=True)
-    run(["docker", "pull", rolling])
-    version = image_version(inspect_image(rolling), rolling)
+def resolve_pin(name: str, repository: str, version: str | None = None) -> ImagePin:
+    if version is None:
+        rolling = f"{repository}:stable"
+        print(f"Discovering {name} from {rolling} ...", flush=True)
+        run(["docker", "pull", rolling])
+        version = image_version(inspect_image(rolling), rolling)
 
     versioned = f"{repository}:{version}"
     print(f"Pulling {versioned} ...", flush=True)
@@ -127,8 +128,10 @@ def write_pins(env_file: Path, source: str, pins: list[ImagePin]) -> None:
             source = assignment.sub(lambda match: f"{match.group(1)}{pin.reference}", source)
         else:
             source = f"{source.rstrip()}\n{pin.name}={pin.reference}\n"
+    write_env(env_file, source, mode=stat.S_IMODE(env_file.stat().st_mode))
 
-    mode = stat.S_IMODE(env_file.stat().st_mode)
+
+def write_env(env_file: Path, source: str, *, mode: int) -> None:
     temporary: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -143,6 +146,36 @@ def write_pins(env_file: Path, source: str, pins: list[ImagePin]) -> None:
     finally:
         if temporary and os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def resolve_pins(
+    source: str, *, dlp: bool, version: str | None = None
+) -> tuple[str, list[ImagePin]]:
+    selected = dict(API_IMAGES)
+    if dlp:
+        selected.update(DLP_IMAGES)
+
+    release_pins = [
+        resolve_pin(name, configured_repository(source, name, default), version)
+        for name, default in selected.items()
+    ]
+    versions = {pin.version for pin in release_pins}
+    if len(versions) != 1:
+        details = ", ".join(f"{pin.name}={pin.version}" for pin in release_pins)
+        raise RuntimeError(f"Rolling images are not from one release: {details}")
+
+    external = dict(EXTERNAL_IMAGES)
+    if dlp:
+        external.update(DLP_EXTERNAL_IMAGES)
+    external_pins = [
+        resolve_external_pin(
+            name,
+            configured_repository(source, name, default_repository),
+            tag,
+        )
+        for name, (default_repository, tag) in external.items()
+    ]
+    return versions.pop(), release_pins + external_pins
 
 
 def main() -> int:
@@ -160,32 +193,7 @@ def main() -> int:
     if not env_file.is_file():
         raise RuntimeError(f"Environment file is not a regular file: {env_file}")
     source = env_file.read_text(encoding="utf-8")
-    selected = dict(API_IMAGES)
-    if args.dlp:
-        selected.update(DLP_IMAGES)
-
-    release_pins = [
-        resolve_pin(name, configured_repository(source, name, default))
-        for name, default in selected.items()
-    ]
-    versions = {pin.version for pin in release_pins}
-    if len(versions) != 1:
-        details = ", ".join(f"{pin.name}={pin.version}" for pin in release_pins)
-        raise RuntimeError(f"Rolling images are not from one release: {details}")
-
-    external = dict(EXTERNAL_IMAGES)
-    if args.dlp:
-        external.update(DLP_EXTERNAL_IMAGES)
-    external_pins = [
-        resolve_external_pin(
-            name,
-            configured_repository(source, name, default_repository),
-            tag,
-        )
-        for name, (default_repository, tag) in external.items()
-    ]
-    pins = release_pins + external_pins
-    version = versions.pop()
+    version, pins = resolve_pins(source, dlp=args.dlp)
     if args.dry_run:
         print("Dry run; no file was changed.")
     else:

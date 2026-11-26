@@ -24,6 +24,9 @@ python scripts/version.py bump --publish -n "Describe the release here"
    release workflow. Publishing the stable GitHub Release triggers PyPI
    publishing for all Python packages.
 
+Production hosts with the automatic updater deploy the release once the
+tagged Docker workflow succeeds. [Automatic stable updates](../DOCKER.md#automatic-stable-updates)
+
 Use a description file for multiline notes:
 
 ```bash

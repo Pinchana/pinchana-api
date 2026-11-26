@@ -42,7 +42,7 @@ class UpdateRollingTests(unittest.TestCase):
     def test_main_always_updates_main_gluetun_and_leaves_dlp_without_flag(self):
         observed_external = []
 
-        def release_pin(name, repository):
+        def release_pin(name, repository, version=None):
             return update_rolling.ImagePin(name, "26.09.2", f"{repository}@sha256:release")
 
         def external_pin(name, repository, tag):
@@ -71,7 +71,7 @@ class UpdateRollingTests(unittest.TestCase):
     def test_dlp_flag_updates_dedicated_gluetun(self):
         observed_external = []
 
-        def release_pin(name, repository):
+        def release_pin(name, repository, version=None):
             return update_rolling.ImagePin(name, "26.09.2", f"{repository}@sha256:release")
 
         def external_pin(name, repository, tag):
@@ -104,6 +104,23 @@ class UpdateRollingTests(unittest.TestCase):
             observed_external,
             [("GLUETUN_IMAGE", "latest"), ("DLP_VPN_IMAGE", "v3")],
         )
+
+    def test_exact_release_uses_the_versioned_tag_and_checks_the_label(self):
+        repository = update_rolling.API_IMAGES["SERVER_IMAGE"]
+        digest = "sha256:" + "a" * 64
+        metadata = {
+            "Config": {"Labels": {update_rolling.VERSION_LABEL: "26.09.2"}},
+            "RepoDigests": [f"{repository}@{digest}"],
+        }
+        with (
+            mock.patch.object(update_rolling, "run") as run,
+            mock.patch.object(update_rolling, "inspect_image", return_value=metadata),
+        ):
+            pin = update_rolling.resolve_pin("SERVER_IMAGE", repository, "26.09.2")
+            self.assertEqual(pin.reference, f"{repository}@{digest}")
+            run.assert_called_once_with(["docker", "pull", f"{repository}:26.09.2"])
+            with self.assertRaisesRegex(RuntimeError, "Version label"):
+                update_rolling.resolve_pin("SERVER_IMAGE", repository, "26.09.3")
 
 
 if __name__ == "__main__":
