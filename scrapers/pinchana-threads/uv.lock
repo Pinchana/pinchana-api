@@ -1015,7 +1015,7 @@ wheels = [
 
 [[package]]
 name = "pinchana-core"
-version = "26.11.15"
+version = "26.11.16"
 source = { directory = "../../pinchana-core" }
 dependencies = [
     { name = "aiohttp" },
@@ -1044,7 +1044,7 @@ requires-dist = [
 
 [[package]]
 name = "pinchana-threads"
-version = "26.11.15"
+version = "26.11.16"
 source = { editable = "." }
 dependencies = [
     { name = "cloakbrowser" },
@@ -1052,6 +1052,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pinchana-core" },
+    { name = "playwright" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "tenacity" },
@@ -1071,6 +1072,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.162.2" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pinchana-core", directory = "../../pinchana-core" },
+    { name = "playwright", specifier = "<1.65" },
     { name = "pydantic", specifier = ">=2.14.3" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "tenacity", specifier = ">=9.2.1" },

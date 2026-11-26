@@ -1,6 +1,6 @@
 [project]
 name = "pinchana-scraper"
-version = "26.11.15"
+version = "26.11.16"
 description = "One Python package for importing all Pinchana scrapers"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -16,7 +16,7 @@ dependencies = [
     "pinchana-shorts>=26.11.14",
     "pinchana-soundcloud>=26.11.14",
     "pinchana-spotify>=26.11.14",
-    "pinchana-threads>=26.11.14",
+    "pinchana-threads>=26.11.16",
     "pinchana-tiktok>=26.11.14",
     "pinchana-twitter>=26.11.14",
     "pinchana-ytgroups>=26.11.14",

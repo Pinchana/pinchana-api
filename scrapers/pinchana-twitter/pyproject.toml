@@ -1,6 +1,6 @@
 [project]
 name = "pinchana-twitter"
-version = "26.11.15"
+version = "26.11.16"
 description = "Twitter/X scraper plugin for Pinchana"
 readme = "README.md"
 requires-python = ">=3.13"
