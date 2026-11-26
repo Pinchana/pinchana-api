@@ -1,0 +1,48 @@
+[project]
+name = "pinchana-scraper"
+version = "26.11.14"
+description = "One Python package for importing all Pinchana scrapers"
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "pinchana-core>=26.11.14",
+    "pinchana-apple-music>=26.11.14",
+    "pinchana-bluesky>=26.11.14",
+    "pinchana-coub>=26.11.14",
+    "pinchana-deezer>=26.11.14",
+    "pinchana-inst>=26.11.14",
+    "pinchana-shorts>=26.11.14",
+    "pinchana-soundcloud>=26.11.14",
+    "pinchana-spotify>=26.11.14",
+    "pinchana-threads>=26.11.14",
+    "pinchana-tiktok>=26.11.14",
+    "pinchana-twitter>=26.11.14",
+    "pinchana-ytgroups>=26.11.14",
+    "pinchana-ytmusic>=26.11.14",
+]
+
+[project.urls]
+Repository = "https://github.com/Pinchana/pinchana-api"
+Issues = "https://github.com/Pinchana/pinchana-api/issues"
+
+[tool.uv.sources]
+pinchana-core = { path = "../pinchana-core" }
+pinchana-apple-music = { path = "../scrapers/pinchana-apple-music" }
+pinchana-bluesky = { path = "../scrapers/pinchana-bluesky" }
+pinchana-coub = { path = "../scrapers/pinchana-coub" }
+pinchana-deezer = { path = "../scrapers/pinchana-deezer" }
+pinchana-inst = { path = "../scrapers/pinchana-inst" }
+pinchana-shorts = { path = "../scrapers/pinchana-shorts" }
+pinchana-soundcloud = { path = "../scrapers/pinchana-soundcloud" }
+pinchana-spotify = { path = "../scrapers/pinchana-spotify" }
+pinchana-threads = { path = "../scrapers/pinchana-threads" }
+pinchana-tiktok = { path = "../scrapers/pinchana-tiktok" }
+pinchana-twitter = { path = "../scrapers/pinchana-twitter" }
+pinchana-ytgroups = { path = "../scrapers/pinchana-ytgroups" }
+pinchana-ytmusic = { path = "../scrapers/pinchana-ytmusic" }
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"

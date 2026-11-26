@@ -2,16 +2,16 @@
 
 ## Project Structure & Module Organization
 
-This repository contains the Pinchana scraping gateway, its scraper packages, and Docker Compose configuration. Each Python package lives in its own top-level directory. The gateway image installs the scraper packages at build time. `pinchana-core` is shared by the scraper packages.
+This repository contains the Pinchana scraping gateway, its scraper packages, and Docker Compose configuration. The platform packages live under `scrapers/`. The gateway, shared core, Python bundle, and DLP services have their own top-level directories. The gateway image installs the platform packages at build time.
 
 The gateway listens on `8080`. Gluetun's control port is `8000`. DLP uses its dedicated internal network.
 
 ## Build, Test, and Development Commands
 
-Run Python development commands from the package directory:
+Run Python development commands from the scraper package directory:
 
 ```bash
-cd pinchana-<name>
+cd scrapers/pinchana-<name>
 uv sync
 uv run uvicorn pinchana_<name>.main:app --reload
 uv run python -c "import pinchana_<name>; print('ok')"
@@ -36,7 +36,7 @@ Use Python 3.13+, async I/O for network work, and package names matching `pincha
 Tests are sparse. `pinchana-inst` has pytest coverage; live Instagram cases are skipped unless enabled:
 
 ```bash
-cd pinchana-inst
+cd scrapers/pinchana-inst
 uv run pytest
 PINCHANA_INST_LIVE=1 uv run pytest
 ```

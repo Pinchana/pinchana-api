@@ -150,5 +150,5 @@ def test_bluesky_inspect_accepts_did_without_downloading(request_api, monkeypatc
 def test_bluesky_route_matches_the_host_and_needs_no_container():
     module = main._resolve_module(URL)
     assert module.name == "bluesky"
-    assert module.routes["/scrape"].endpoint is bluesky.process_scrape_request
+    assert module.plugin.operation("scrape") is bluesky.process_scrape_request
     assert main._resolve_module(f"https://example.org/?url={URL}") is None

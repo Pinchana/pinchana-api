@@ -15,9 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /workspace/pinchana-server
-COPY --parents pinchana-*/pyproject.toml pinchana-*/README.md /workspace/
+COPY --parents \
+    pinchana-core/pyproject.toml pinchana-core/README.md \
+    pinchana-server/pyproject.toml pinchana-server/README.md \
+    scrapers/pinchana-*/pyproject.toml scrapers/pinchana-*/README.md /workspace/
 COPY pinchana-server/uv.lock ./
-COPY --parents --exclude=**/__pycache__ pinchana-*/src /workspace/
+COPY --parents --exclude=**/__pycache__ \
+    pinchana-core/src pinchana-server/src scrapers/pinchana-*/src /workspace/
 
 RUN uv sync --locked --no-dev --no-editable
 

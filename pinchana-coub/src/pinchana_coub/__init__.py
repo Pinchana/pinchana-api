@@ -1,2 +1,0 @@
-"""Pinchana Coub scraper service."""
-

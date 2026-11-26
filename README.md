@@ -1,355 +1,266 @@
 # Pinchana API
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![Publish Docker images](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Pinchana/pinchana-api/actions/workflows/docker-publish.yml)
 
-Pinchana API is a Docker Compose-based media extraction gateway. A central FastAPI server accepts the versioned `/v1/scrape` request, selects a platform module, and returns a normalized response. The production stack routes outbound scraper traffic through Gluetun; the development stack can run without VPN credentials. The unversioned `/scrape` route remains available for existing integrations.
+Pinchana extracts media and metadata from 13 scraper integrations. Use
+`pinchana-scraper` in a Python script, or run the FastAPI gateway to serve
+scrape requests and cached media over HTTP.
 
-## Supported modules
+[Python API](#python-api) · [Docker gateway](#run-the-http-gateway) · [Supported modules](#supported-modules) · [Development](#development)
 
-| Module | Routes |
-| --- | --- |
-| TikTok | `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`, `tt.site` |
-| Instagram | `instagram.com`, `instagr.am` |
-| YouTube Shorts | `youtube.com/shorts` |
-| YouTube groups | `youtube.com/watch`, `youtu.be` via the Telegram client endpoint |
-| SoundCloud | `soundcloud.com`, `on.soundcloud.com` |
-| YouTube Music | `music.youtube.com` |
-| Apple Music | `music.apple.com` (individual tracks only) |
-| Spotify | `open.spotify.com` |
-| Deezer | `deezer.com` and Deezer share links |
-| Threads | `threads.net`, `threads.com` |
-| X / Twitter | `x.com`, `twitter.com`, `vxtwitter.com`, `fxtwitter.com` |
-| Coub | `coub.com/view`, `coub.com/embed` |
-| Bluesky | `bsky.app/profile/<handle-or-did>/post/<id>` |
+## Get the source
 
-All 12 scrapers are installed into the gateway image at build time. The gateway
-calls their Python handlers directly and serves the API and cached media on
-port `8080`. Production uses Gluetun for egress. Gluetun's authenticated control
-port defaults to `8000` on loopback. The optional DLP stack has its own internal
-network and isolated workers for private downloads.
-
-Bluesky returns public post text, photos, MP4 video, and one level of quotes.
-`/v1/inspect` returns post and quote metadata without downloading media.
-
-Threads uses its HTTP extractor first. The browser fallback uses the free,
-keyless CloakBrowser Chromium 146 release. Leave `CLOAKBROWSER_LICENSE_KEY`
-unset. The gateway downloads the browser from CloakBrowser on first use, and
-Compose keeps it in the `threads-browser` volume across upgrades.
-
-## Repository layout
-
-The repository contains Compose configuration, release tooling, and the
-`pinchana-*` module directories. Each Python package has its own
-`pyproject.toml`, `uv.lock`, and source directory. The gateway locks and
-installs those packages together.
-
-`pinchana-core` contains shared models, storage, music helpers, and Gluetun
-control logic.
-
-## Quick start
-
-```bash
+```sh
 git clone https://github.com/Pinchana/pinchana-api.git
 cd pinchana-api
 ```
 
-If you already have a checkout with initialized submodules, save any module
-changes and back up local files inside those directories that you need to keep.
-Run these commands before pulling the migration:
+## Python API
 
-```bash
-git submodule deinit --all
-git -c submodule.recurse=false pull --ff-only
+The `pinchana-scraper` bundle gives you one import namespace for all 13
+scrapers. Python loads each scraper when you import it. You can also install
+individual scraper packages. [Bundle guide](pinchana-scraper/README.md)
+
+Save this as `example.py` and replace `VIDEO_ID` with a YouTube Shorts ID.
+
+```python
+import asyncio
+
+from pinchana_scraper import shorts
+
+
+async def main():
+    result = await shorts.scrape(
+        "https://www.youtube.com/shorts/VIDEO_ID",
+        cache_dir="./downloads",
+    )
+    print(result.caption)
+    print(result.media_path(result.video_url))
+
+
+asyncio.run(main())
 ```
 
-Create configuration:
+Run it from the repository root with Python 3.13+ and `uv`. Set
+`VPN_ENABLED=false` before importing a scraper when running outside Gluetun.
 
-```bash
+```sh
+VPN_ENABLED=false uv run --project pinchana-scraper --locked python example.py
+```
+
+- Use `from pinchana_scraper.shorts import scrape` to import the function directly.
+- `scrape()` returns metadata and downloads media into the cache. Pass a returned media URL to `result.media_path()` to find the local file, including carousel and quote attachments.
+- Catch `pinchana_core.ScrapeError` for scraper failures. It exposes `status_code` and `detail`.
+- Use one event loop for concurrent calls to a scraper. Check each module guide for platform credentials and local tool requirements.
+
+| Operation | Available in |
+| --- | --- |
+| `scrape(url, *, cache_dir=None)` | All scrapers |
+| `inspect(url)` for metadata | Bluesky, Coub, Threads, X / Twitter |
+| `playlist(url)` for ordered track URLs | Deezer, Spotify |
+| `scrape_playlist_item(url)` for one YouTube video | Shorts |
+
+## Run the HTTP gateway
+
+A single FastAPI process calls the bundled scrapers directly. The gateway
+serves the API and cached media on port `8080` by default.
+
+For a new checkout, copy the sample configuration and replace the placeholder in
+`PINCHANA_API_KEYS`. Give each machine client its own named key so you can
+revoke it independently. [Configuration example](.env.example)
+
+```sh
 cp .env.example .env
 chmod 600 .env
 ```
 
-For the production stack, set at least the API key and VPN credentials. NordVPN
-manual connections should use the service username and password shown under
-Nord Account's Manual setup page:
-
-```env
-VPN_SERVICE_PROVIDER=nordvpn
-VPN_TYPE=openvpn
-OPENVPN_USER=REPLACE_WITH_NORDVPN_SERVICE_USERNAME
-OPENVPN_PASSWORD=REPLACE_WITH_NORDVPN_SERVICE_PASSWORD
-OPENVPN_PROTOCOL=tcp
+```dotenv
 PINCHANA_API_KEYS={"automation":"REPLACE_WITH_LONG_RANDOM_MACHINE_KEY"}
 ```
 
-Do not use the Nord Account password or access token as the OpenVPN password.
-Providers that still issue supported manual WireGuard keys can instead set
-`VPN_TYPE=wireguard` and `WIREGUARD_PRIVATE_KEY`.
+### Development with Docker
 
-For Spotify scraping, also set:
+Build the gateway from the checkout. This Compose file runs the gateway
+without a VPN.
 
-```env
-SPOTIFY_CLIENT_ID=REPLACE_WITH_CLIENT_ID
-SPOTIFY_CLIENT_SECRET=REPLACE_WITH_CLIENT_SECRET
+```sh
+docker compose --env-file .env -f docker-compose.dev.yml up --detach --build
 ```
 
-Run prebuilt GHCR images:
+### Production with Docker
 
-```bash
+Configure the VPN in `.env`. For NordVPN OpenVPN, use the service username and
+password from Nord Account's Manual setup page. Providers that issue manual
+WireGuard keys can use `VPN_TYPE=wireguard` and `WIREGUARD_PRIVATE_KEY`.
+
+```dotenv
+VPN_SERVICE_PROVIDER=nordvpn
+VPN_TYPE=openvpn
+OPENVPN_PROTOCOL=tcp
+OPENVPN_USER=REPLACE_WITH_NORDVPN_SERVICE_USERNAME
+OPENVPN_PASSWORD=REPLACE_WITH_NORDVPN_SERVICE_PASSWORD
+```
+
+Use the rolling updater to pin the production images by digest, then start the
+stack. Gluetun publishes the gateway listener and provides VPN egress.
+
+```sh
 python scripts/update_rolling.py --env-file .env
 docker compose --env-file .env config --quiet
 docker compose --env-file .env up --detach
 ```
 
-This is the supported production update path. It discovers the newest coherent
-CalVer release through the rolling `stable` channel, resolves the main Gluetun
-image from the `latest` development channel, and atomically stores immutable
-image digests in `.env`. Add `--dlp` to include all three DLP images and its
-dedicated Gluetun image from the stable `v3` channel.
+Use the same updater for upgrades. Recreate Gluetun through Compose when its
+digest changes so it reloads VPN credentials. [Docker operations guide](DOCKER.md)
 
-When upgrading from the per-scraper Compose stack, pin the first release with
-the bundled gateway, then recreate the stack with `--remove-orphans` to remove
-the old scraper containers. If this Compose project already runs DLP, include
-`--profile dlp` when applying the update. The shared `scraper-cache` volume is
-reused.
+### Check the gateway
 
-Build the gateway from source without a VPN:
-
-```bash
-docker compose --env-file .env -f docker-compose.dev.yml up --detach --build
-```
-
-Check health:
-
-```bash
+```sh
 curl --fail-with-body --silent --show-error http://localhost:8080/health
 ```
 
-## API Usage
+## API usage
 
-```bash
+Send the target URL to `POST /v1/scrape` with your machine key.
+
+```sh
 curl --fail-with-body --silent --show-error \
-  --request POST http://localhost:8080/v1/scrape \
+  http://localhost:8080/v1/scrape \
   --header 'Content-Type: application/json' \
   --header 'X-API-Key: REPLACE_WITH_MACHINE_KEY' \
-  --data '{"url":"https://www.instagram.com/p/REPLACE_WITH_PUBLIC_SHORTCODE/"}'
+  --data '{"url":"https://www.youtube.com/shorts/VIDEO_ID"}'
 ```
 
-The same endpoint accepts supported TikTok, YouTube Shorts, SoundCloud, YouTube Music, Spotify, Deezer, Threads, Twitter/X, Bluesky, Coub, and Instagram URLs. Configure independently revocable machine keys with `PINCHANA_API_KEYS`, a JSON object such as `{"bot":"secret","automation":"other-secret"}`. Machine requests to `/v1/scrape`, legacy `/scrape`, `/media/...`, and `/admin/...` must include `X-API-Key`.
+The response contains `data` and `meta`. Read downloads from the ordered
+`data.media` list. Images and videos include dimensions when the gateway can
+probe the cached file. V1 errors include an `error` object with a stable
+`code` and `message`.
 
-`/v1/scrape` returns `{data, meta}`. Source, content, author, engagement, safety,
-music, and link metadata are grouped, while all downloadable images, videos,
-audio, covers, and slideshow soundtracks live in one ordered `data.media` array.
-Each image or video includes `dimensions: {width, height}` when the cached file
-can be inspected. V1 errors use a stable `{error: {code, message, details}}`
-envelope. The flat `/scrape` response remains available for existing clients.
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /v1/scrape` | Download media and return normalized metadata |
+| `POST /v1/inspect` | Inspect supported posts and quote metadata without downloading media |
+| `GET /media/…` | Fetch a cached file with the machine key |
+| `POST /v1/bot/ytgroups` | Prepare a full YouTube video for a Telegram upload |
+| `POST /scrape` | Return the legacy flat response |
 
-Browser clients use the isolated web flow:
+Machine routes use `X-API-Key`. The OpenAPI reference is available at
+`/docs` on the running gateway. [Telegram cache behavior](docs/TELEGRAM_MEDIA_CACHE.md)
 
-1. `GET /web/identity` publishes an optional project-issued instance certificate.
-2. `POST /web/verify` exchanges a one-use Turnstile token for a signed session.
-3. `GET /web/session` validates that bearer session.
-4. `POST /v1/web/scrape` returns the normalized v1 contract and `GET /web/media/...` serves its protected assets without exposing a machine API key. Legacy `/web/scrape` remains available for older clients.
+### Browser and mobile clients
 
-Native clients never receive a machine API key. Mobile authentication is
-optional by default: scrape, cached media, and capability routes accept
-anonymous requests and validate scoped installation tokens when supplied.
-Set `MOBILE_AUTH_REQUIRED=true` to require those tokens. Private DLP routes
-always require an authenticated installation because the installation identity
-is their job-ownership boundary.
+| Client | Authentication | Scrape endpoint |
+| --- | --- | --- |
+| Browser | `POST /web/verify` exchanges a Turnstile token for a bearer session | `POST /v1/web/scrape` |
+| Mobile | Use scoped installation tokens. Set `MOBILE_AUTH_REQUIRED=true` to require them for ordinary scrapes. | `POST /v1/mobile/scrape` |
 
-When enabled, the mobile installation grant flow is:
+Browser and mobile sessions use `/web/media/…` and `/mobile/media/…`,
+respectively. Check sessions with `GET /web/session` or `GET /v1/mobile/session`.
+Configure Turnstile with `TURNSTILE_SECRET_KEY`,
+`TURNSTILE_EXPECTED_HOSTNAME`, `TURNSTILE_EXPECTED_ACTION=turnstile-spin-v1`,
+and `TURNSTILE_SESSION_SECRET`. The shipped mobile configuration uses
+`MOBILE_AUTH_MODE=guest`. [Instance certificates](docs/INSTANCE_TRUST.md) · [Mobile installation authentication](docs/MOBILE_AUTH.md)
 
-1. `POST /v1/mobile/challenges` creates a short-lived, single-use challenge.
-2. `POST /v1/mobile/grants` consumes the challenge and returns a 15-minute
-   scoped access token plus a rotating refresh token.
-3. `POST /v1/mobile/session/refresh` rotates the refresh token; reuse revokes
-   the complete token family.
-4. Mobile scrape, media, and capability routes accept the token optionally;
-   DLP routes require it and enforce their required scope.
+### Private YouTube downloads
 
-Grant and refresh state is stored in `MOBILE_SESSION_DB_PATH`, which defaults to
-the server's persistent cache volume. The current production Compose default is
-`MOBILE_AUTH_MODE=guest`: this issues revocable, scoped installation sessions
-without requiring App Store or Play Store attestation and without placing a
-machine key in the app. Optional `attested` mode can later delegate App Attest
-and Play Integrity validation to `MOBILE_ATTESTATION_URL`. The former static-key
-`/v1/mobile/verify` exchange is retired; `/v1/mobile/attest` remains as a
-deprecated alias for `/v1/mobile/grants`. See
-[mobile installation authentication](docs/MOBILE_AUTH.md) for operational
-requirements.
+The optional DLP profile handles full YouTube video downloads in isolated
+workers. Mobile DLP always requires an authenticated installation. Keep
+`DLP_ENABLED=false` until the production preflight and canary pass.
+[DLP rollout guide](docs/DLP_PRODUCTION_ROLLOUT.md)
 
-The official web client accepts custom origins only with an origin-bound,
-unexpired certificate. See [the instance trust model](docs/INSTANCE_TRUST.md).
+| Cookie use | Compose setting | Default host location |
+| --- | --- | --- |
+| Shorts and YouTube group uploads | `SHORTS_COOKIES_DIR` | `./secrets/yt-cookies/` |
+| DLP fallback for full videos | `DLP_HOST_COOKIES_DIR` | `./secrets/dlp-cookies/youtube.txt` |
 
-Browser-encrypted private downloads use the optional asynchronous DLP profile,
-not the normal `/scrape` module router. Keep `DLP_ENABLED=false` until its
-internal services and immutable images pass the [production rollout
-preflight](docs/DLP_PRODUCTION_ROLLOUT.md).
+Compose mounts both directories read-only. Use a Netscape cookie file from an
+account that can play the requested video. DLP uses client-submitted cookies
+first when present. [Shorts cookies](scrapers/pinchana-shorts/README.md#configuration) · [DLP host cookies](pinchana-dlp/README.md#optional-host-cookies)
 
-Set the widget's private key as `TURNSTILE_SECRET_KEY`; the API calls Cloudflare Siteverify directly and never exposes this key to the web application. Set `TURNSTILE_EXPECTED_HOSTNAME` to the production web hostname and keep `TURNSTILE_EXPECTED_ACTION=turnstile-spin-v1`. Use a random `TURNSTILE_SESSION_SECRET` of at least 32 characters. Sessions default to 12 hours and are capped at 24 hours.
+### Administration
 
-When one of Cloudflare's documented public test secrets is configured for local development, the API still requires `success=true` but skips hostname and action checks because dummy validation responses do not carry production widget metadata. Production secrets always enforce the configured hostname and action.
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Check gateway and scraper health |
+| `GET /admin/modules` | List loaded scrapers and URL patterns |
+| `GET /admin/vpn/status` | Check the VPN |
+| `POST /admin/vpn/rotate` | Request a VPN reconnect |
 
-Admin endpoints:
+## Supported modules
 
-- `GET /health`
-- `GET /admin/vpn/status`
-- `POST /admin/vpn/rotate`
-- `GET /admin/modules`
-
-## Configuration Notes
-
-In production, the gateway uses Gluetun's network namespace:
-
-```yaml
-network_mode: container:gluetun
-```
-
-Gluetun publishes the gateway listener. Development Compose publishes the same
-listener directly and sets `VPN_ENABLED=false`.
-
-Never run `docker restart gluetun`; it can clear VPN credentials and cause `AUTH_ERROR`. Recreate it instead:
-
-```bash
-docker compose --env-file .env up --detach --force-recreate gluetun
-```
-
-Shorts can use YouTube cookies from `SHORTS_COOKIES_DIR` mounted read-only to `/run/pinchana-cookies`. `SHORTS_MAX_MB_PER_MINUTE` controls optional MP4 re-encoding for oversized output.
+| Scraper | Python import from `pinchana_scraper` | Typical URLs |
+| --- | --- | --- |
+| [Apple Music](scrapers/pinchana-apple-music/README.md) | `apple_music` | `music.apple.com`, individual tracks |
+| [Bluesky](scrapers/pinchana-bluesky/README.md) | `bluesky` | `bsky.app/profile/<handle-or-did>/post/<id>` |
+| [Coub](scrapers/pinchana-coub/README.md) | `coub` | `coub.com/view/…`, `coub.com/embed/…` |
+| [Deezer](scrapers/pinchana-deezer/README.md) | `deezer` | `deezer.com` and Deezer share links |
+| [Instagram](scrapers/pinchana-inst/README.md) | `instagram` | `instagram.com`, `instagr.am` |
+| [SoundCloud](scrapers/pinchana-soundcloud/README.md) | `soundcloud` | `soundcloud.com`, `on.soundcloud.com` |
+| [Spotify](scrapers/pinchana-spotify/README.md) | `spotify` | `open.spotify.com` |
+| [Threads](scrapers/pinchana-threads/README.md) | `threads` | `threads.net`, `threads.com` |
+| [TikTok](scrapers/pinchana-tiktok/README.md) | `tiktok` | `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`, `tt.site` |
+| [X / Twitter](scrapers/pinchana-twitter/README.md) | `twitter` | `x.com`, `twitter.com`, share links via the gateway |
+| [YouTube groups](scrapers/pinchana-ytgroups/README.md) | `ytgroups` | `youtube.com/watch`, `youtu.be` via the Telegram gateway endpoint |
+| [YouTube Music](scrapers/pinchana-ytmusic/README.md) | `ytmusic` | `music.youtube.com` |
+| [YouTube Shorts](scrapers/pinchana-shorts/README.md) | `shorts` | `youtube.com/shorts/…` |
 
 ## Development
 
-Run all scrapers in the gateway locally:
+| Path | Responsibility |
+| --- | --- |
+| `pinchana-core/` | Shared models, caching, music helpers, and Gluetun control |
+| `pinchana-scraper/` | Python bundle and scraper imports |
+| `pinchana-server/` | FastAPI gateway, authentication, and HTTP response handling |
+| `scrapers/` | Platform scraper packages |
+| `pinchana-dlp/` | Optional private download services and workers |
+| `docs/` | Deployment, client auth, and release guides |
 
-```bash
-cd pinchana-server
-uv sync --locked
-VPN_ENABLED=false uv run uvicorn pinchana_server.main:app --reload
+Run the gateway directly or run its test suite from the repository root.
+
+```sh
+VPN_ENABLED=false uv run --project pinchana-server --locked \
+  uvicorn pinchana_server.main:app --reload
+
+uv run --project pinchana-server --locked pytest -q pinchana-server/tests
 ```
 
-Run Instagram tests:
+To add a scraper under `scrapers/`, follow the Bluesky package for plugin
+registration. Add it to the gateway's module list and Python dependencies, then expose
+its Python functions through the bundle. Refresh both lockfiles and test both entry
+points. [Bluesky package](scrapers/pinchana-bluesky/) · [Gateway module list](pinchana-server/src/pinchana_server/modules.py) · [Bundle sources](pinchana-scraper/src/pinchana_scraper/)
 
-```bash
-cd pinchana-inst
-uv run pytest -q
-PINCHANA_INST_LIVE=1 uv run pytest -q
+<details>
+<summary>Update a checkout that still uses Git submodules</summary>
+
+Back up any module edits or local files you need before deinitializing the
+old submodules.
+
+```sh
+git submodule deinit --all
+git -c submodule.recurse=false pull --ff-only
 ```
 
-Docker builds must use the repo root as build context:
+For a stack that still has a container per scraper, follow the first-upgrade
+instructions in the [Docker guide](DOCKER.md).
 
-```bash
-docker build -f pinchana-server/Dockerfile -t pinchana-server .
-```
+</details>
 
-## Releases and Images
+## Releases
 
-The gateway and optional DLP images are published to:
+`VERSION` uses `YY.MM.ITERATION`. The release script keeps Python package
+versions and lockfiles in sync.
 
-```text
-ghcr.io/pinchana/pinchana-api/<server|dlp-api|dlp-orchestrator|dlp-worker>:<tag>
-```
+| Channel | GHCR tags |
+| --- | --- |
+| Main branch snapshot | `latest` |
+| Tagged release | An exact version such as `26.11.14`, monthly `26.11`, and `stable` |
 
-`VERSION` is the single source of truth for the rolling product release. It uses
-strict CalVer in `YY.MM.ITERATION` form. Releases within a month increment the
-last number (`26.08.1`, `26.08.2`); the first release of a new month resets it to
-`1`. The version tool calculates that transition, converts the result to PEP 440,
-and keeps every Python package manifest and lockfile synchronized:
-
-```bash
-python scripts/version.py check
-python scripts/version.py next
-python scripts/version.py bump
-```
-
-`bump` commits the package metadata and lockfiles together with `VERSION` and
-pushes the current branch. After the main build is green, create an annotated
-tag matching `VERSION` exactly:
-
-```bash
-git tag -a v26.08.1 -m "Release 26.08.1"
-git push origin v26.08.1
-```
-
-`python scripts/version.py set YY.MM.N` remains available for an explicit
-correction. CI rejects mismatched or nonstandard release tags. Image tag policy:
-
-- Push to `main`: publishes the snapshot channel `latest`; build metadata reports
-  `<VERSION>+dev.<commit>`.
-- Release tag such as `v26.08.1`: publishes immutable `26.08.1`, rolling monthly
-  `26.08`, and rolling release channel `stable`.
-- Manual workflow dispatch can select services but cannot mint release tags.
-
-The legacy `stable` branch is not a release input. This prevents manual builds
-and branch drift from overwriting the rolling release channel.
-
-On a deployment host, apply the newest release only through the rolling updater:
-
-```bash
-python scripts/update_rolling.py --env-file .env --dry-run
-python scripts/update_rolling.py --env-file .env
-# Include DLP only when that profile should advance with the API release:
-python scripts/update_rolling.py --env-file .env --dlp
-```
-
-When the Gluetun digest changes, recreate it before applying the rest of the
-stack; never use `docker restart gluetun`:
-
-```bash
-docker compose --env-file .env up --detach --force-recreate gluetun
-docker compose --env-file .env up --detach
-```
-
-## Adding a Module
-
-1. Add a package under `pinchana-<name>/` that registers a `ScraperPlugin` with
-   its URL patterns and handlers. Use `pinchana-bluesky/` as a reference.
-2. Add the package and its local path to `pinchana-server/pyproject.toml`. Add it
-   to the module list in `pinchana_server/modules.py`, then refresh the gateway
-   lockfile with `uv lock --project pinchana-server`.
-3. Build the gateway image and test the relevant public and authenticated API
-   routes. The existing gateway port, media cache, and deployment cover new
-   modules.
+Images live under `ghcr.io/pinchana/pinchana-api/`. See the release guide for
+building, publishing, and verifying a tagged release.
+[Release guide](docs/RELEASING.md)
 
 ## License
 
-MIT. See `LICENSE`.
-
-Apple Music uses the `pinchana-apple-music/` package inside the gateway.
-Configure `SOCIALCRAWL_API_KEY`
-for metadata lookup; audio is matched and downloaded through YouTube Music.
-Only individual tracks are accepted, including album URLs with a selected
-`?i=TRACK_ID`. See [the module guide](pinchana-apple-music/README.md).
-
-Python dependencies and build backends were refreshed across all API packages,
-including the DLP requirements files. The Threads module's `pyee` version is
-limited by Playwright's declared `pyee<15` requirement. Refresh each package's
-lockfile with `uv lock --upgrade` and install it with `uv sync --frozen`.
-
-### Host cookies for full YouTube video sessions
-
-DLP accepts full YouTube video URLs only. Apple Music, Spotify, YouTube Music,
-Shorts and playlist pages remain on their own service routes. Starting Compose
-with `--profile dlp` also starts the gateway, which handles these scrapers.
-
-To supply optional operator cookies, put a Netscape cookie file at
-`<DLP_HOST_COOKIES_DIR>/youtube.txt`. The default directory is
-`./secrets/dlp-cookies`, which is ignored by Git. The DLP API mounts it read-only
-at `/run/host-cookies`, runs as UID/GID 10001, and must be able to read the file:
-
-```sh
-sudo install -d -o 10001 -g 10001 -m 700 secrets/dlp-cookies
-sudo install -o 10001 -g 10001 -m 600 /path/to/cookies.txt secrets/dlp-cookies/youtube.txt
-```
-
-Host cookies are optional. Without the file, downloads remain anonymous unless
-the client submits user cookies. For each submission without `cookiesEnc`, the
-DLP API encrypts host cookies for the allocated worker before queuing anything
-in Redis. User cookies always take priority. Send `useHostCookies: false` in a
-job submission to disable the host fallback for that session. Host cookies are
-never returned to clients. The worker's existing temporary-cookie cleanup also
-applies to these envelopes. Restart/recreate `dlp-api` after changing the mount
-configuration; replacing `youtube.txt` within the directory is read on the next
-submission.
+Pinchana is released under the MIT License. [License text](LICENSE)

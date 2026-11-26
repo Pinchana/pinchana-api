@@ -1066,7 +1066,7 @@ wheels = [
 [[package]]
 name = "pinchana-apple-music"
 version = "26.11.14"
-source = { directory = "../pinchana-apple-music" }
+source = { directory = "../scrapers/pinchana-apple-music" }
 dependencies = [
     { name = "fastapi" },
     { name = "pinchana-core" },
@@ -1085,7 +1085,7 @@ requires-dist = [
 [[package]]
 name = "pinchana-bluesky"
 version = "26.11.14"
-source = { directory = "../pinchana-bluesky" }
+source = { directory = "../scrapers/pinchana-bluesky" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -1133,7 +1133,7 @@ requires-dist = [
 [[package]]
 name = "pinchana-coub"
 version = "26.11.14"
-source = { directory = "../pinchana-coub" }
+source = { directory = "../scrapers/pinchana-coub" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -1160,7 +1160,7 @@ dev = [
 [[package]]
 name = "pinchana-deezer"
 version = "26.11.14"
-source = { directory = "../pinchana-deezer" }
+source = { directory = "../scrapers/pinchana-deezer" }
 dependencies = [
     { name = "deezer-python" },
     { name = "fastapi" },
@@ -1181,7 +1181,7 @@ requires-dist = [
 [[package]]
 name = "pinchana-inst"
 version = "26.11.14"
-source = { directory = "../pinchana-inst" }
+source = { directory = "../scrapers/pinchana-inst" }
 dependencies = [
     { name = "curl-cffi" },
     { name = "fastapi" },
@@ -1243,20 +1243,20 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.162.2" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pinchana-apple-music", directory = "../pinchana-apple-music" },
-    { name = "pinchana-bluesky", directory = "../pinchana-bluesky" },
+    { name = "pinchana-apple-music", directory = "../scrapers/pinchana-apple-music" },
+    { name = "pinchana-bluesky", directory = "../scrapers/pinchana-bluesky" },
     { name = "pinchana-core", directory = "../pinchana-core" },
-    { name = "pinchana-coub", directory = "../pinchana-coub" },
-    { name = "pinchana-deezer", directory = "../pinchana-deezer" },
-    { name = "pinchana-inst", directory = "../pinchana-inst" },
-    { name = "pinchana-shorts", directory = "../pinchana-shorts" },
-    { name = "pinchana-soundcloud", directory = "../pinchana-soundcloud" },
-    { name = "pinchana-spotify", directory = "../pinchana-spotify" },
-    { name = "pinchana-threads", directory = "../pinchana-threads" },
-    { name = "pinchana-tiktok", directory = "../pinchana-tiktok" },
-    { name = "pinchana-twitter", directory = "../pinchana-twitter" },
-    { name = "pinchana-ytgroups", directory = "../pinchana-ytgroups" },
-    { name = "pinchana-ytmusic", directory = "../pinchana-ytmusic" },
+    { name = "pinchana-coub", directory = "../scrapers/pinchana-coub" },
+    { name = "pinchana-deezer", directory = "../scrapers/pinchana-deezer" },
+    { name = "pinchana-inst", directory = "../scrapers/pinchana-inst" },
+    { name = "pinchana-shorts", directory = "../scrapers/pinchana-shorts" },
+    { name = "pinchana-soundcloud", directory = "../scrapers/pinchana-soundcloud" },
+    { name = "pinchana-spotify", directory = "../scrapers/pinchana-spotify" },
+    { name = "pinchana-threads", directory = "../scrapers/pinchana-threads" },
+    { name = "pinchana-tiktok", directory = "../scrapers/pinchana-tiktok" },
+    { name = "pinchana-twitter", directory = "../scrapers/pinchana-twitter" },
+    { name = "pinchana-ytgroups", directory = "../scrapers/pinchana-ytgroups" },
+    { name = "pinchana-ytmusic", directory = "../scrapers/pinchana-ytmusic" },
     { name = "pydantic", specifier = ">=2.14.3" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
@@ -1267,7 +1267,7 @@ dev = [{ name = "pytest", specifier = ">=9.2.0" }]
 [[package]]
 name = "pinchana-shorts"
 version = "26.11.14"
-source = { directory = "../pinchana-shorts" }
+source = { directory = "../scrapers/pinchana-shorts" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -1292,7 +1292,7 @@ requires-dist = [
 [[package]]
 name = "pinchana-soundcloud"
 version = "26.11.14"
-source = { directory = "../pinchana-soundcloud" }
+source = { directory = "../scrapers/pinchana-soundcloud" }
 dependencies = [
     { name = "fastapi" },
     { name = "pinchana-core" },
@@ -1309,7 +1309,7 @@ requires-dist = [
 [[package]]
 name = "pinchana-spotify"
 version = "26.11.14"
-source = { directory = "../pinchana-spotify" }
+source = { directory = "../scrapers/pinchana-spotify" }
 dependencies = [
     { name = "fastapi" },
     { name = "pinchana-core" },
@@ -1330,7 +1330,7 @@ requires-dist = [
 [[package]]
 name = "pinchana-threads"
 version = "26.11.14"
-source = { directory = "../pinchana-threads" }
+source = { directory = "../scrapers/pinchana-threads" }
 dependencies = [
     { name = "cloakbrowser" },
     { name = "curl-cffi" },
@@ -1365,7 +1365,7 @@ dev = [
 [[package]]
 name = "pinchana-tiktok"
 version = "26.11.14"
-source = { directory = "../pinchana-tiktok" }
+source = { directory = "../scrapers/pinchana-tiktok" }
 dependencies = [
     { name = "curl-cffi" },
     { name = "fastapi" },
@@ -1396,7 +1396,7 @@ dev = [
 [[package]]
 name = "pinchana-twitter"
 version = "26.11.14"
-source = { directory = "../pinchana-twitter" }
+source = { directory = "../scrapers/pinchana-twitter" }
 dependencies = [
     { name = "curl-cffi" },
     { name = "fastapi" },
@@ -1425,7 +1425,7 @@ dev = [
 [[package]]
 name = "pinchana-ytgroups"
 version = "26.11.14"
-source = { directory = "../pinchana-ytgroups" }
+source = { directory = "../scrapers/pinchana-ytgroups" }
 dependencies = [
     { name = "fastapi" },
     { name = "pinchana-core" },
@@ -1442,7 +1442,7 @@ requires-dist = [
 [[package]]
 name = "pinchana-ytmusic"
 version = "26.11.14"
-source = { directory = "../pinchana-ytmusic" }
+source = { directory = "../scrapers/pinchana-ytmusic" }
 dependencies = [
     { name = "fastapi" },
     { name = "pinchana-core" },

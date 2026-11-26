@@ -5,6 +5,7 @@ import os
 import shutil
 import time
 import uuid
+from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Awaitable, Callable, Optional, Dict, TypeVar
@@ -16,10 +17,22 @@ T = TypeVar("T")
 # A gateway-issued scope isolates one Telegram delivery from the persistent
 # scraper cache. Requests without a scope keep all previous cache semantics.
 _cache_scope: ContextVar[str | None] = ContextVar("pinchana_cache_scope", default=None)
+_cache_directory: ContextVar[Path | None] = ContextVar("pinchana_cache_directory", default=None)
 
 
 def set_cache_scope(value: str | None) -> None:
     _cache_scope.set(value)
+
+
+@contextmanager
+def cache_context(scope: str | None = None, directory: Path | None = None):
+    scope_token = _cache_scope.set(scope)
+    directory_token = _cache_directory.set(directory)
+    try:
+        yield
+    finally:
+        _cache_directory.reset(directory_token)
+        _cache_scope.reset(scope_token)
 
 
 class MediaStorage:
@@ -27,24 +40,23 @@ class MediaStorage:
 
     def __init__(self, base_path: str = "./cache", max_size_gb: float = 10.0):
         self._base_path = Path(base_path)
-        self._base_path.mkdir(parents=True, exist_ok=True)
         self.max_size_bytes = int(max_size_gb * 1024 * 1024 * 1024)
         self._http_client: httpx.AsyncClient | None = None
         self._http_client_lock = asyncio.Lock()
         self._download_limit = asyncio.Semaphore(
             max(1, int(os.getenv("MEDIA_DOWNLOAD_CONCURRENCY", "4")))
         )
-        self._inflight: dict[str, asyncio.Task] = {}
+        self._inflight: dict[tuple[Path, str], asyncio.Task] = {}
         self._inflight_lock = asyncio.Lock()
 
     @property
     def base_path(self) -> Path:
+        base_path = _cache_directory.get() or self._base_path
         scope = _cache_scope.get()
         if scope:
-            ephemeral_path = self._base_path / ".transient" / scope
-            ephemeral_path.mkdir(parents=True, exist_ok=True)
-            return ephemeral_path
-        return self._base_path
+            base_path = base_path / ".transient" / scope
+        base_path.mkdir(parents=True, exist_ok=True)
+        return base_path
 
     async def _client(self) -> httpx.AsyncClient:
         if self._http_client is None:
@@ -58,29 +70,31 @@ class MediaStorage:
         return self._http_client
 
     async def close(self) -> None:
+        # A cancelled caller can leave a shielded singleflight download running.
+        pending = [task for task in self._inflight.values() if not task.done()]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
         if self._http_client is not None:
             await self._http_client.aclose()
             self._http_client = None
 
     async def singleflight(self, key: str, operation: Callable[[], Awaitable[T]]) -> T:
         """Run at most one operation for a cache key and share its result."""
-        scope = _cache_scope.get()
-        if scope:
-            key = f"transient:{scope}:{key}"
+        cache_key = (self.base_path.resolve(), key)
         async with self._inflight_lock:
-            task = self._inflight.get(key)
+            task = self._inflight.get(cache_key)
             if task is None:
                 task = asyncio.create_task(operation())
-                self._inflight[key] = task
+                self._inflight[cache_key] = task
                 task.add_done_callback(
                     lambda completed: asyncio.create_task(
-                        self._remove_inflight(key, completed)
+                        self._remove_inflight(cache_key, completed)
                     )
                 )
 
         return await asyncio.shield(task)
 
-    async def _remove_inflight(self, key: str, task: asyncio.Task) -> None:
+    async def _remove_inflight(self, key: tuple[Path, str], task: asyncio.Task) -> None:
         async with self._inflight_lock:
             if self._inflight.get(key) is task:
                 self._inflight.pop(key, None)

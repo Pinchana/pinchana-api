@@ -1,6 +1,7 @@
 """scraper-core — shared components for the modular scraper platform."""
 
 from .docker_manager import ModuleContainerManager
+from .library import PlaylistResult, ScrapeError, ScrapeResult
 from .models import MediaItem, TrackItem, ScrapeRequest, ScrapeResponse
 from .music import MusicDownloader, MusicDownloadError
 from .plugins import PluginRegistry, ScraperPlugin, registry
@@ -12,6 +13,9 @@ __all__ = [
     "TrackItem",
     "ScrapeRequest",
     "ScrapeResponse",
+    "ScrapeResult",
+    "ScrapeError",
+    "PlaylistResult",
     "MediaStorage",
     "MusicDownloader",
     "MusicDownloadError",

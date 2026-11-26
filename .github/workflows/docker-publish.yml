@@ -12,6 +12,7 @@ on:
       - 'scripts/build_manifest.py'
       - 'pinchana-*/**'
       - 'pinchana-*'
+      - 'scrapers/**'
   workflow_dispatch:
     inputs:
       services:
@@ -59,20 +60,21 @@ jobs:
 
       - name: Test music download scope isolation
         run: |
-          for module in pinchana-core pinchana-ytmusic pinchana-spotify pinchana-deezer pinchana-soundcloud; do
+          for module in pinchana-core scrapers/pinchana-ytmusic scrapers/pinchana-spotify \
+                        scrapers/pinchana-deezer scrapers/pinchana-soundcloud; do
             uv run --directory "$module" --with pytest --with pytest-asyncio python -m pytest -q
           done
 
       - name: Test TikTok format selection and extraction
-        working-directory: pinchana-tiktok
+        working-directory: scrapers/pinchana-tiktok
         run: uv run --with pytest --with pytest-asyncio python -m pytest -q
 
       - name: Test Apple Music tracks
-        working-directory: pinchana-apple-music
+        working-directory: scrapers/pinchana-apple-music
         run: uv run --with pytest pytest -q
 
       - name: Test Coub scraper
-        working-directory: pinchana-coub
+        working-directory: scrapers/pinchana-coub
         run: uv run pytest -q
 
       - name: Validate Compose profiles
@@ -119,6 +121,7 @@ jobs:
             else
               # A change in any bundled package changes the server image.
               if grep -qFx 'scripts/build_manifest.py' <<< "$changed" ||
+                 grep -q '^scrapers/' <<< "$changed" ||
                  grep -E '^pinchana-' <<< "$changed" | grep -qvE '^pinchana-dlp(/|$)'; then
                 selected+=(server)
               fi

@@ -7,9 +7,8 @@ from importlib import import_module
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
-from fastapi.routing import APIRoute
 from pinchana_core.models import ScrapeRequest
-from pinchana_core.plugins import registry
+from pinchana_core.plugins import ScraperPlugin, registry
 from pinchana_core.storage import set_cache_scope
 from pydantic import HttpUrl
 
@@ -37,7 +36,7 @@ class ScraperModule:
     name: str
     app: FastAPI
     patterns: tuple[str, ...]
-    routes: dict[str, APIRoute]
+    plugin: ScraperPlugin
 
     def matches(self, url: httpx.URL) -> bool:
         if self.name == "bluesky":
@@ -53,8 +52,8 @@ class ScraperModule:
     async def run(
         self, operation: str, request: ScrapeRequest, *, cache_scope: str | None = None,
     ) -> dict:
-        route = self.routes.get(f"/{operation}")
-        if route is None or "POST" not in route.methods:
+        handler = self.plugin.operation(operation)
+        if handler is None:
             raise HTTPException(400, f"{operation.capitalize()} is unavailable for {self.name}")
         url = request.url
         if self.name == "twitter" and (url.host or "").removeprefix("www.") in TWITTER_SHARE_HOSTS:
@@ -64,7 +63,7 @@ class ScraperModule:
         set_cache_scope(request.cache_scope)
         try:
             async with asyncio.timeout(SCRAPE_TIMEOUTS.get(self.name, 120)):
-                result = jsonable_encoder(await route.endpoint(request))
+                result = jsonable_encoder(await handler(request))
             if not isinstance(result, dict):
                 raise HTTPException(502, "The scraper returned an invalid response")
             return result
@@ -74,9 +73,11 @@ class ScraperModule:
             set_cache_scope(None)
 
     async def health(self) -> dict:
+        handler = self.plugin.health_fn
+        assert handler is not None
         try:
             async with asyncio.timeout(5):
-                detail = await self.routes["/health"].endpoint()
+                detail = await handler()
         except HTTPException as exc:
             return {"mode": "in_process", "status": "unhealthy", "detail": exc.detail}
         except Exception as exc:
@@ -89,14 +90,12 @@ def _load_module(name: str, package: str) -> ScraperModule:
     plugin = registry.get(name)
     if plugin is None:
         raise RuntimeError(f"{package} did not register the {name} scraper")
-    routes = {route.path: route for route in plugin.router.routes if isinstance(route, APIRoute)}
-    for path in ("/scrape", "/health"):
-        if path not in routes:
-            raise RuntimeError(f"{package} is missing its {path} handler")
+    if plugin.scrape_fn is None or plugin.health_fn is None:
+        raise RuntimeError(f"{package} is missing a scrape or health handler")
     patterns = tuple(plugin.route_patterns)
     if name == "twitter":
         patterns += TWITTER_SHARE_HOSTS
-    return ScraperModule(name, app, patterns, routes)
+    return ScraperModule(name, app, patterns, plugin)
 
 
 modules = {name: _load_module(name, package) for name, package in PACKAGES.items()}

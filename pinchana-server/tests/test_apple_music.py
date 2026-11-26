@@ -1,6 +1,4 @@
 import unittest
-from dataclasses import replace
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from starlette.requests import Request
@@ -19,8 +17,7 @@ class AppleMusicGatewayTests(unittest.IsolatedAsyncioTestCase):
             audio_url="/media/apple_music/am-123/audio.mp3", duration=180,
         ))
         module = main.modules["apple_music"]
-        route = SimpleNamespace(methods={"POST"}, endpoint=scrape)
-        with patch.dict(main.modules, {"apple_music": replace(module, routes={"/scrape": route})}):
+        with patch.object(module.plugin, "scrape_fn", scrape):
             result = await main._normalized_scrape_response(
                 ScrapeRequest(url=url),
                 Request({"type": "http", "method": "POST", "path": "/v1/scrape", "headers": []}),

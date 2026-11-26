@@ -2,6 +2,7 @@
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import call, patch
@@ -13,10 +14,24 @@ SPEC.loader.exec_module(version)
 
 
 class PackageReleaseTests(unittest.TestCase):
+    def test_discovers_top_level_projects_and_nested_scrapers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            projects = [
+                root / "pinchana-core" / "pyproject.toml",
+                root / "pinchana-server" / "pyproject.toml",
+                root / "scrapers" / "pinchana-apple-music" / "pyproject.toml",
+            ]
+            for project in projects:
+                project.parent.mkdir(parents=True)
+                project.touch()
+            with patch.object(version, "ROOT", root):
+                self.assertEqual(version.project_files(), projects)
+
     def test_commits_and_pushes_all_package_versions_together(self):
         projects = [
             version.ROOT / "pinchana-core" / "pyproject.toml",
-            version.ROOT / "pinchana-apple-music" / "pyproject.toml",
+            version.ROOT / "scrapers" / "pinchana-apple-music" / "pyproject.toml",
         ]
         with (
             patch.object(version, "project_files", return_value=projects),
@@ -32,7 +47,8 @@ class PackageReleaseTests(unittest.TestCase):
                 call(
                     "add", "--", "VERSION",
                     "pinchana-core/pyproject.toml", "pinchana-core/uv.lock",
-                    "pinchana-apple-music/pyproject.toml", "pinchana-apple-music/uv.lock",
+                    "scrapers/pinchana-apple-music/pyproject.toml",
+                    "scrapers/pinchana-apple-music/uv.lock",
                 ),
                 call("commit", "-m", "release: 26.10.2"),
                 call("push", "origin", "HEAD:refs/heads/main"),

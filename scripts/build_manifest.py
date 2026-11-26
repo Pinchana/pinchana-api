@@ -25,10 +25,17 @@ def manifest() -> dict[str, dict[str, str]]:
             "repository": REPOSITORY,
         }
     }
-    for path in git("ls-tree", "-d", "--name-only", "HEAD").splitlines():
-        if not path.startswith("pinchana-"):
+    paths = git("ls-tree", "-d", "--name-only", "HEAD").splitlines()
+    if "scrapers" in paths:
+        paths.extend(
+            f"scrapers/{name}"
+            for name in git("ls-tree", "-d", "--name-only", "HEAD:scrapers").splitlines()
+        )
+    for path in paths:
+        package = path.rsplit("/", 1)[-1]
+        if not package.startswith("pinchana-"):
             continue
-        name = NAME_OVERRIDES.get(path, path.removeprefix("pinchana-"))
+        name = NAME_OVERRIDES.get(package, package.removeprefix("pinchana-"))
         result[name] = {
             "commit": git("log", "-1", "--format=%H", "HEAD", "--", path),
             "repository": REPOSITORY,

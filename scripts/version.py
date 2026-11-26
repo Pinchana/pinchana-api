@@ -130,7 +130,10 @@ def comparable_pep440(
 
 
 def project_files() -> list[Path]:
-    return sorted(ROOT.glob("pinchana-*/pyproject.toml"))
+    return sorted([
+        *ROOT.glob("pinchana-*/pyproject.toml"),
+        *ROOT.glob("scrapers/pinchana-*/pyproject.toml"),
+    ])
 
 
 def project_metadata(path: Path) -> tuple[str, str]:

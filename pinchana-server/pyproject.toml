@@ -32,19 +32,19 @@ dev = [
 
 [tool.uv.sources]
 pinchana-core = { path = "../pinchana-core" }
-pinchana-apple-music = { path = "../pinchana-apple-music" }
-pinchana-bluesky = { path = "../pinchana-bluesky" }
-pinchana-coub = { path = "../pinchana-coub" }
-pinchana-deezer = { path = "../pinchana-deezer" }
-pinchana-inst = { path = "../pinchana-inst" }
-pinchana-shorts = { path = "../pinchana-shorts" }
-pinchana-soundcloud = { path = "../pinchana-soundcloud" }
-pinchana-spotify = { path = "../pinchana-spotify" }
-pinchana-threads = { path = "../pinchana-threads" }
-pinchana-tiktok = { path = "../pinchana-tiktok" }
-pinchana-twitter = { path = "../pinchana-twitter" }
-pinchana-ytgroups = { path = "../pinchana-ytgroups" }
-pinchana-ytmusic = { path = "../pinchana-ytmusic" }
+pinchana-apple-music = { path = "../scrapers/pinchana-apple-music" }
+pinchana-bluesky = { path = "../scrapers/pinchana-bluesky" }
+pinchana-coub = { path = "../scrapers/pinchana-coub" }
+pinchana-deezer = { path = "../scrapers/pinchana-deezer" }
+pinchana-inst = { path = "../scrapers/pinchana-inst" }
+pinchana-shorts = { path = "../scrapers/pinchana-shorts" }
+pinchana-soundcloud = { path = "../scrapers/pinchana-soundcloud" }
+pinchana-spotify = { path = "../scrapers/pinchana-spotify" }
+pinchana-threads = { path = "../scrapers/pinchana-threads" }
+pinchana-tiktok = { path = "../scrapers/pinchana-tiktok" }
+pinchana-twitter = { path = "../scrapers/pinchana-twitter" }
+pinchana-ytgroups = { path = "../scrapers/pinchana-ytgroups" }
+pinchana-ytmusic = { path = "../scrapers/pinchana-ytmusic" }
 
 [build-system]
 requires = ["uv_build>=0.13.7,<0.14.0"]

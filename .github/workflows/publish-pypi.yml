@@ -1,0 +1,105 @@
+name: Publish Python packages to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to build
+        required: true
+        type: string
+      projects:
+        description: Comma-separated PyPI project names, or all
+        required: true
+        default: pinchana-core
+        type: string
+      publish:
+        description: Upload the selected distributions to PyPI
+        default: false
+        type: boolean
+      resume:
+        description: Skip files already uploaded in a partial release
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.distributions.outputs.matrix }}
+    steps:
+      - name: Validate tag format
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]{2}\.(0[1-9]|1[0-2])\.[1-9][0-9]*$ ]]; then
+            echo "Enter an existing release tag such as v26.11.15."
+            exit 1
+          fi
+
+      - name: Check out the tagged release
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release ancestry
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: git merge-base --is-ancestor HEAD "refs/remotes/origin/$DEFAULT_BRANCH"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Build and validate distributions
+        id: distributions
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          PYPI_PROJECTS: ${{ inputs.projects }}
+        run: |
+          matrix=$(python scripts/build_pypi.py \
+            --tag "$RELEASE_TAG" --projects "$PYPI_PROJECTS" --out-dir dist/pypi)
+          uvx twine check --strict dist/pypi/*/*.whl dist/pypi/*/*.tar.gz
+          printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+
+      - name: Store distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: pypi-distributions
+          path: dist/pypi/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: inputs.publish && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    name: Publish ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.build.outputs.matrix) }}
+    environment:
+      name: ${{ matrix.environment }}
+      url: https://pypi.org/project/${{ matrix.project }}/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: pypi-distributions
+          path: dist/
+
+      - name: Upload this package to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.14.3
+        with:
+          packages-dir: dist/${{ matrix.project }}/
+          skip-existing: ${{ inputs.resume }}

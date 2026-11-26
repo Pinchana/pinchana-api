@@ -89,7 +89,6 @@ class MusicDownloader:
         gluetun: GluetunController | None = None,
     ):
         self._base_dir = base_dir
-        self.base_dir.mkdir(parents=True, exist_ok=True)
         self.proxy = proxy
         self.cookies_path = self._find_cookies()
         self.gluetun = gluetun or GluetunController()

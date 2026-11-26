@@ -80,3 +80,8 @@ python scripts/publish_release.py --draft -F RELEASE_NOTES.md
 
 If no description is provided for a new GitHub Release, `gh --generate-notes`
 is used.
+
+## Python packages
+
+The PyPI workflow publishes the core, platform scrapers, and Python bundle in
+manually selected batches. [PyPI publishing and Trusted Publisher setup](PYPI_PUBLISHING.md)
